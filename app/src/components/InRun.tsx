@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useWebRushProgram } from "../hooks/useWebRushProgram";
+import { useSolsocketRoom } from "../hooks/useSolsocketRoom";
 import {
   ENTRY_FEE_LAMPORTS,
   estimatedPayoutLamports,
@@ -35,12 +36,27 @@ const CASHOUT_ANIMATION_MS = 1000;
  */
 export function InRun({ onFinished }: { onFinished: (result: RunResult) => void }) {
   const ctx = useWebRushProgram();
+  const social = useSolsocketRoom();
   const [swingIndex, setSwingIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<SwingPhase>("idle");
   const [statusMsg, setStatusMsg] = useState<string | null>("Delegating to rollup...");
   const [error, setError] = useState<string | null>(null);
   const finishedRef = useRef(false);
+
+  // Presence broadcast: fires whenever OUR displayed multiplier/status
+  // changes rather than on a blind timer -- swings here only advance once
+  // every ~2s (see the wallet-popup-per-swing note in the tick loop below),
+  // so a 5-10Hz interval would just resend the same unchanged value most of
+  // the time. Broadcasting on every real state change keeps other players'
+  // view of us fresh without the wasted traffic.
+  useEffect(() => {
+    if (!social.ready) return;
+    social.broadcast({
+      multiplier: multiplierAt(swingIndex),
+      status: phase,
+    });
+  }, [social.ready, swingIndex, phase]);
 
   useEffect(() => {
     if (!ctx) return;
@@ -70,6 +86,7 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
           finishedRef.current = true;
           setSwingIndex(run.swingIndex);
           setPhase("missed");
+          social.emitEvent("miss", { atMultiplier: multiplierAt(run.swingIndex) });
           setTimeout(() => {
             onFinished({ outcome: "missed", multiplier: multiplierAt(run.swingIndex) });
           }, MISS_ANIMATION_MS);
@@ -108,6 +125,7 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
       setPhase("cashed_out");
       const payoutLamports = estimatedPayoutLamports(ENTRY_FEE_LAMPORTS, swingIndex);
       const multiplier = multiplierAt(swingIndex);
+      social.emitEvent("cashout", { atMultiplier: multiplier });
       setTimeout(() => {
         onFinished({ outcome: "cashed_out", payoutLamports, multiplier });
       }, CASHOUT_ANIMATION_MS);
@@ -145,6 +163,26 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
         <p className="payout-preview">
           Cash out now for ~{(payout / 1e9).toFixed(4)} SOL
         </p>
+      </div>
+
+      {social.players.length > 0 && (
+        <div className="other-players-panel">
+          <div className="other-players-title">In this room</div>
+          {social.players.map((p) => (
+            <div key={p.key} className="other-player-row">
+              <span className="other-player-name">{p.short}</span>
+              <span className="other-player-multiplier">{p.multiplier.toFixed(2)}x</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="notification-stack">
+        {social.notifications.map((n) => (
+          <div key={n} className="notification-toast">
+            {n}
+          </div>
+        ))}
       </div>
 
       <div className="hud-overlay hud-bottom">

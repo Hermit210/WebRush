@@ -22,6 +22,7 @@
     "buffer": "^6.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "solsocket": "^0.2.1",
     "three": "^0.169.0"
   },
   "devDependencies": {

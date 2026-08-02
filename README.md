@@ -130,7 +130,7 @@ There's also a Magic Router (`https://devnet-router.magicblock.app`) that auto-r
 
 ## 3D visual layer (branch: `3d-upgrade`)
 
-**This is a separate, larger-scope track on top of the working 2D MVP, not a replacement for it.** `main` stays exactly as the flat-canvas 2D version (the safe fallback submission); all of this lives on `3d-upgrade` only. Per the honesty note this track started from: this is the closest realistic real-time approximation of a cinematic reference video buildable solo with free assets — moody neon city, animated character, bloom glow — not a pixel-match to a pre-rendered AI cinematic.
+**This started as a separate, larger-scope track on top of the working 2D MVP, not a replacement for it.** It's since been merged into `main` via PR #1 -- if you're reading this on `main`, the app now renders the 3D scene, not the old flat `<Skyline>` canvas. The pure-2D, GPU-independent version still exists as its own branch, `2d-safe-fallback`, pinned to the last commit before that merge, kept specifically as a guaranteed-working fallback regardless of how the 3D/GPU story plays out on your machine. Per the honesty note this track started from: this is the closest realistic real-time approximation of a cinematic reference video buildable solo with free assets — moody neon city, animated character, bloom glow — not a pixel-match to a pre-rendered AI cinematic.
 
 **Stack:** Three.js via React Three Fiber. Pinned to the React-18-compatible major versions (`@react-three/fiber@^8`, `@react-three/drei@^9`, `@react-three/postprocessing@^2`) — the current `@react-three/fiber@9` line requires React 19, which would conflict with the React 18 pin already in place for wallet-adapter compatibility (see "Wiring the frontend to the program" above).
 
@@ -153,6 +153,46 @@ There's also a Magic Router (`https://devnet-router.magicblock.app`) that auto-r
 - Also measured FPS via `requestAnimationFrame` sampling and read back `WEBGL_debug_renderer_info`: this environment reports `SwiftShader Device (Subzero)` (Google's CPU-based software WebGL fallback, used because there's no real GPU passthrough here) at ~4fps. That number is **not a real-world performance result** — SwiftShader is typically 20-100x slower than actual hardware for a scene like this — so it can't be used to claim the scene is fast enough on a real machine, only that it renders correctly without crashing. Fixed one real, environment-independent issue found in the process anyway: `SwingRig`/`ChaseCamera` were allocating a fresh `THREE.Vector3` every single frame; both now reuse scratch vectors via refs.
 
 **Still not done / needs your actual browser + GPU to confirm:** real-world frame rate on your machine, cross-browser check, and whether the neon/bloom tuning reads as intended on a real display rather than a screenshot from software rendering.
+
+## Stage A polish: floating 3D HUD numbers (branch: `stage-a-hud`)
+
+Not yet merged anywhere. Adds two things the original 3D build didn't have, matching a reference-video detail: a floating glow-outlined multiplier number that appears near the character on each successful swing (`FloatingMultiplier.tsx`), and a rotating gold radar-ring + badge shown when crossing 5x/10x/15x/20x milestones (`PeakMultiplierBadge.tsx`). The main flat multiplier readout is untouched.
+
+Worth knowing: the first implementation used `@react-three/drei`'s `<Text>` (built on `troika-three-text`'s SDF shader) and it rendered **zero visible glyphs** in this sandbox's software-rendering fallback despite the font loading and parsing successfully with no thrown errors -- confirmed via headless-browser screenshots, not assumed. Likely an SDF-shader/hardware-derivative-extension gap specific to software rendering (SwiftShader), though this couldn't be confirmed either way without real GPU access. Switched to `<Html>` (a real DOM element anchored to a 3D position via CSS transform) instead, which sidesteps the WebGL text pipeline entirely and was confirmed rendering via multiple real screenshots. If you're on real hardware and curious whether `<Text>` actually works fine there, it's a one-line swap back in both files -- but there was no way to justify shipping something unverified either way from this sandbox.
+
+Exact sizing (`distanceFactor` + CSS `font-size`) was tuned by eye against screenshots from degraded software rendering -- a final pass with real hardware is worth doing before calling this pixel-perfect.
+
+## Stage B: shared-presence multiplayer via solsocket (branch: `stage-b-multiplayer`)
+
+Not yet merged anywhere; branched off `main` (so it inherits the 3D layer). Builds the "Option A" mode: players see each other live in the same room, but every player's own money/escrow still runs entirely through the existing, untouched Anchor program -- solsocket only carries presence and ephemeral event messages, never SOL.
+
+**Dependency check done first, not assumed:** solsocket's own `package.json` declares `@coral-xyz/anchor: 0.32.1` (exact) and `@solana/web3.js: ^1.98.0` -- both match WebRush's existing pinned versions exactly, so `npm install solsocket` added the package cleanly with zero version conflicts.
+
+**A real gotcha, found by reading the installed package's actual `.d.ts` files, not the SDK's own example snippets:** `room.joinOrCreate(name, opts)`'s `creator` option defaults to the *calling* wallet. If every player's own wallet were left as the creator, each distinct player would silently spin up their own separate `"webrush-lobby"` room instead of landing in one shared room together -- the whole point of the feature would silently fail while looking like it worked. Fixed by pre-creating the room once under a fixed, well-known wallet (this project's existing devnet deploy/treasury wallet, `B55s6G5z1HL4saF38ojeNDRWujoLbadZYCr1Wf3SWjEs`) via `scripts/bootstrap-solsocket.ts`, and having the frontend hook (`useSolsocketRoom.ts`) always pass that same pubkey as `creator` so every player resolves to the identical on-chain room.
+
+**Verified real, not just assumed from the SDK's docs:**
+- Ran `scripts/bootstrap-solsocket.ts` against devnet -- it actually created the room on-chain. Confirmed independently via a raw `getAccountInfo` RPC call: the room account exists, 575 bytes, owned by `DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh` (MagicBlock's delegation program -- the same one our own program's ER delegation uses), meaning solsocket had already delegated it to the ephemeral rollup as documented.
+- Frontend build passes clean; headless-browser check shows zero runtime errors and the same working wallet-picker modal as before -- solsocket's code is bundled and inert until a wallet connects, exactly as intended.
+- Attempted a full two-client live test (`scripts/test-solsocket.ts`, two independent devnet keypairs simulating two players, checking that player A's `broadcast()`/`emit("miss")` actually reach player B's `onPresence`/`onMessage`) but hit a real, isolated environment issue: Node's native `fetch` (undici) times out specifically against `api.devnet.solana.com` from this sandbox, while `curl` to the exact same endpoint and Node `fetch` to unrelated hosts (example.com, npm registry) both work fine. Most likely explanation: this session made a very large number of requests to Solana's public devnet RPC over its total duration (program deploys, treasury funding, ER tests, multiple bootstrap runs), and the provider is now rate-limiting this sandbox's IP for that specific connection pattern. This is a sandbox/session-usage artifact, not a code defect -- but it does mean **the live two-client data flow has not been confirmed end-to-end by anything other than reading the source and confirming the room exists on-chain.**
+
+**What still needs your own two-browser-profile test** (see the walkthrough below): does the other-players panel actually populate with a second wallet's live multiplier, and do the miss/cashout toast notifications actually appear.
+
+### Manual multiplayer test walkthrough
+
+You'll need two browser profiles (or a normal window + an incognito/private window) each with their own Phantom wallet funded with devnet SOL, since solsocket's shared room needs two genuinely different wallets connected to see presence between them.
+
+```bash
+cd /home/saloni/projects/WebRush
+git checkout stage-b-multiplayer
+git pull
+cd app && npm install
+npm run dev -- --host
+```
+
+1. In **both** browser profiles: open the printed URL, connect a different Phantom wallet in each, start a run in both.
+2. In **profile 1**, once in the in-run screen: within a few seconds you should see an **"In this room"** panel in the top-right listing profile 2's wallet (shortened, e.g. `Ab3d..Xy9z`) with their current multiplier. *If broken:* the panel never appears in either profile → check the browser console for a solsocket connection error.
+3. Let one profile miss (or cash out) -- the *other* profile should see a brief toast near the bottom, e.g. "Ab3d..Xy9z missed at 3.71x" or "...cashed out at 2.20x". *If broken:* the panel updates fine but toasts never appear → the presence channel works but message emission doesn't, worth reporting with which one you saw.
+4. Confirm the panel entry disappears a few seconds after the other player leaves/closes their tab (stale-presence cleanup, ~8s timeout).
 
 ## Known rough edges / next steps
 
