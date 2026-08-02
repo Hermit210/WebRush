@@ -18,13 +18,15 @@ function DebugHarness() {
 
   useEffect(() => {
     let i = 0;
+    // Goes up to 9 so it actually crosses the 5x (~index 7) and 10x
+    // (~index 9) milestones, exercising FloatingMultiplier/PeakMultiplierBadge.
     const id = setInterval(() => {
       i += 1;
       setPhase("swinging");
-      setSwingIndex(Math.min(i, 6));
+      setSwingIndex(Math.min(i, 9));
       setTimeout(() => setPhase("idle"), 1200);
-      if (i >= 6) clearInterval(id);
-    }, 2000);
+      if (i >= 9) clearInterval(id);
+    }, 1800);
     return () => clearInterval(id);
   }, []);
 

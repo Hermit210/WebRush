@@ -6,6 +6,9 @@ import { City } from "./City";
 import { SwingRig, type SwingPhase } from "./SwingRig";
 import { ChaseCamera } from "./ChaseCamera";
 import { getAnchorPoint } from "./cityLayout";
+import { FloatingMultiplier } from "./FloatingMultiplier";
+import { PeakMultiplierBadge } from "./PeakMultiplierBadge";
+import { multiplierAt } from "../anchor/constants";
 
 /**
  * The 3D visual layer. Pure rendering swap over the existing 2D <Skyline>
@@ -54,6 +57,13 @@ export function Scene({
       </Suspense>
 
       <ChaseCamera targetRef={characterPos} velocityRef={velocity} />
+
+      <FloatingMultiplier
+        swingIndex={swingIndex}
+        label={`${multiplierAt(swingIndex).toFixed(2)}x`}
+        anchorRef={characterPos}
+      />
+      <PeakMultiplierBadge swingIndex={swingIndex} anchorRef={characterPos} />
 
       <EffectComposer>
         <Bloom
