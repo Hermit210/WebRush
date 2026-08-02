@@ -1,0 +1,808 @@
+{
+  "address": "8o3RF97HDqRQ7jVEviaYDmiMnGVCwck22XeezGwkYNnU",
+  "metadata": {
+    "name": "webrush",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "WebRush: web-swing rising-multiplier cash-out game on MagicBlock Ephemeral Rollups"
+  },
+  "docs": [
+    "`#[ephemeral]` wires up the undelegation callback handling this program",
+    "needs to be usable from a MagicBlock Ephemeral Rollup (required for",
+    "Solana Blitz v7 prize eligibility -- see BUILD_PROMPT section 1)."
+  ],
+  "instructions": [
+    {
+      "name": "cash_out",
+      "docs": [
+        "Lock in the current multiplier and pay out from the Treasury."
+      ],
+      "discriminator": [
+        1,
+        110,
+        57,
+        58,
+        159,
+        157,
+        243,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "run"
+          ]
+        },
+        {
+          "name": "run",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  117,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delegate_run",
+      "docs": [
+        "Delegate this player's Run PDA to the ephemeral rollup. Call once,",
+        "right after start_run, before the first swing."
+      ],
+      "discriminator": [
+        20,
+        67,
+        38,
+        40,
+        32,
+        211,
+        235,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true
+        },
+        {
+          "name": "buffer_run",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "run"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                115,
+                205,
+                66,
+                126,
+                67,
+                139,
+                93,
+                88,
+                45,
+                244,
+                195,
+                159,
+                66,
+                243,
+                250,
+                181,
+                13,
+                188,
+                144,
+                64,
+                209,
+                20,
+                66,
+                29,
+                47,
+                109,
+                207,
+                238,
+                254,
+                202,
+                245,
+                201
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_run",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "run"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_run",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "run"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "run",
+          "docs": [
+            "the delegation program itself."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  117,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_program",
+          "address": "8o3RF97HDqRQ7jVEviaYDmiMnGVCwck22XeezGwkYNnU"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_treasury",
+      "docs": [
+        "One-time: create the shared Treasury bankroll PDA. Fund it with a",
+        "plain SOL transfer afterward (see README) before demoing."
+      ],
+      "discriminator": [
+        124,
+        186,
+        211,
+        195,
+        85,
+        165,
+        129,
+        166
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  110,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_account"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                181,
+                183,
+                0,
+                225,
+                242,
+                87,
+                58,
+                192,
+                204,
+                6,
+                34,
+                1,
+                52,
+                74,
+                207,
+                151,
+                184,
+                53,
+                6,
+                235,
+                140,
+                229,
+                25,
+                152,
+                204,
+                98,
+                126,
+                24,
+                147,
+                128,
+                167,
+                62
+              ]
+            }
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "start_run",
+      "docs": [
+        "Pay the entry fee and open (or reopen) this player's Run."
+      ],
+      "discriminator": [
+        72,
+        212,
+        1,
+        91,
+        61,
+        186,
+        2,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "run",
+          "docs": [
+            "One Run PDA per player, reused across sessions. Reuse avoids paying",
+            "rent again on every run and gives the account a stable address to",
+            "delegate to the ephemeral rollup each session."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  117,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "The entry fee is transferred straight into the shared Treasury",
+            "bankroll rather than staying in the Run PDA. A single pool is what",
+            "funds cash-out payouts larger than any one player's own stake",
+            "(classic rising-multiplier / crash-game economics) -- see",
+            "instructions/cash_out.rs for the payout side of this."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "swing",
+      "docs": [
+        "Resolve one swing attempt: advances the multiplier on success, or",
+        "forfeits the run on a miss. Meant to be called against the",
+        "ER-delegated copy of the Run account during an active session."
+      ],
+      "discriminator": [
+        193,
+        215,
+        11,
+        13,
+        81,
+        96,
+        151,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "signer": true,
+          "relations": [
+            "run"
+          ]
+        },
+        {
+          "name": "run",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  117,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "undelegate_run",
+      "docs": [
+        "Commit final Run state back to base layer and undelegate. Call after",
+        "cash_out or a miss, before the player's next start_run."
+      ],
+      "discriminator": [
+        121,
+        220,
+        25,
+        231,
+        106,
+        170,
+        158,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "run",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  117,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Run",
+      "discriminator": [
+        199,
+        54,
+        155,
+        86,
+        235,
+        115,
+        246,
+        189
+      ]
+    },
+    {
+      "name": "Treasury",
+      "discriminator": [
+        238,
+        239,
+        123,
+        238,
+        89,
+        1,
+        168,
+        253
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "SwingResolved",
+      "discriminator": [
+        171,
+        120,
+        11,
+        249,
+        86,
+        88,
+        40,
+        178
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "RunAlreadyActive",
+      "msg": "This player already has an active run in progress."
+    },
+    {
+      "code": 6001,
+      "name": "RunNotActive",
+      "msg": "This run is not active (already cashed out, or missed)."
+    },
+    {
+      "code": 6002,
+      "name": "MaxSwingsReached",
+      "msg": "Maximum swing count reached; cash out instead of swinging again."
+    },
+    {
+      "code": 6003,
+      "name": "InsufficientBankroll",
+      "msg": "Treasury bankroll has insufficient funds to cover this payout."
+    }
+  ],
+  "types": [
+    {
+      "name": "Run",
+      "docs": [
+        "One Run PDA per player (seeds = [RUN_SEED, player]), reused across",
+        "sessions via init_if_needed in start_run. Reuse means the address is",
+        "stable, which matters for ephemeral-rollup delegation: the same PDA gets",
+        "delegated at the start of every session and undelegated at the end."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "stake_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "swing_index",
+            "docs": [
+              "Number of successful swings so far; also the index into",
+              "MULTIPLIER_TABLE_X100 / MISS_PROBABILITY_BPS."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "RunStatus"
+              }
+            }
+          },
+          {
+            "name": "seed",
+            "docs": [
+              "MVP randomness seed (slot at start_run). Combined with per-swing",
+              "slot + index in instructions/swing.rs. NOT full VRF -- see the doc",
+              "comment on swing::handler for the documented upgrade path."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RunStatus",
+      "docs": [
+        "NOTE: `Uninitialized` is deliberately variant 0. Anchor's `init_if_needed`",
+        "deserializes a brand-new (all-zero) account through this same enum before",
+        "the handler body runs, so if `Active` were variant 0 every fresh account",
+        "would look \"already active\" and start_run would reject its own first",
+        "call. Keep `Uninitialized` first."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Uninitialized"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "CashedOut"
+          },
+          {
+            "name": "Missed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwingResolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "swing_index",
+            "type": "u8"
+          },
+          {
+            "name": "success",
+            "type": "bool"
+          },
+          {
+            "name": "multiplier_x100",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Treasury",
+      "docs": [
+        "Shared house bankroll. Every entry fee (start_run) flows in here, every",
+        "cash-out payout flows out of here. A single pool is what lets a player's",
+        "payout exceed their own stake -- see instructions/start_run.rs for the",
+        "full rationale. Must be pre-funded with a plain SOL transfer before a",
+        "demo (see README) or early cash-outs can hit InsufficientBankroll."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "total_deposited_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "total_paid_out_lamports",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}
