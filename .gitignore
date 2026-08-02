@@ -13,3 +13,5 @@ app/.env
 app/dist
 app/tsconfig.tsbuildinfo
 .claude/
+scripts/scene-debug-screenshot.png
+*.deb
