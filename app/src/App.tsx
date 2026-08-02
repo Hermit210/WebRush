@@ -17,6 +17,8 @@ import { Lobby } from "./components/Lobby";
 import { InRun, type RunResult } from "./components/InRun";
 import { Result } from "./components/Result";
 import { useSessionKey } from "./hooks/useSessionKey";
+import { Scene, type GamePhase } from "./three/Scene";
+import type { SwingPhase } from "./three/SwingRig";
 
 type Screen = "splash" | "menu" | "in-run" | "result";
 
@@ -28,6 +30,13 @@ type Screen = "splash" | "menu" | "in-run" | "result";
  * the moment Play is clicked (see Lobby.tsx). The wallet control itself
  * lives in the persistent corner pill (see App() below), not gating any
  * screen transition here.
+ *
+ * The 3D <Scene> is mounted here, once, for every screen except splash --
+ * it never unmounts/remounts between menu/in-run/result, it just switches
+ * `gamePhase` (idle preview vs live gameplay vs idle-after-result). This is
+ * what lets the neon city + character be visible and ambient-animated on
+ * the menu screen itself, with zero wallet interaction, instead of hidden
+ * until a run starts (see README "3D idle preview").
  */
 function GameFlow({
   screen,
@@ -42,31 +51,64 @@ function GameFlow({
   // swings silently -- see README "Session keys".
   const { session, createSession, clearSession } = useSessionKey();
 
+  // Mirrors InRun's own swingIndex/phase state up here so the single,
+  // continuously-mounted <Scene> can render the live run -- InRun still owns
+  // the actual tick()/swing-transaction logic untouched, it just reports its
+  // state via onStateChange (see InRun.tsx).
+  const [swingIndex, setSwingIndex] = useState(0);
+  const [phase, setPhase] = useState<SwingPhase>("idle");
+  // Bumped on every new run so the 3D layer's per-run "already shown this
+  // milestone" state (FloatingMultiplier/PeakMultiplierBadge) resets on
+  // replay -- see Scene.tsx's runId doc comment.
+  const [runId, setRunId] = useState(0);
+
+  const gamePhase: GamePhase =
+    screen === "in-run" ? "active" : screen === "result" ? "result" : "idle";
+
+  function handleStarted() {
+    setSwingIndex(0);
+    setPhase("idle");
+    setRunId((id) => id + 1);
+    setScreen("in-run");
+  }
+
   if (screen === "splash") {
     return <Splash onDone={() => setScreen("menu")} />;
   }
-  if (screen === "menu") {
-    return (
-      <Lobby
-        onStarted={() => setScreen("in-run")}
-        createSession={createSession}
-      />
-    );
-  }
-  if (screen === "in-run") {
-    return (
-      <InRun
-        session={session}
-        onFinished={(r) => {
-          clearSession();
-          setResult(r);
-          setScreen("result");
-        }}
-      />
-    );
-  }
+
   return (
-    <Result result={result!} onPlayAgain={() => setScreen("menu")} />
+    <div className="game-stage">
+      <div className="game-canvas">
+        <Scene swingIndex={swingIndex} phase={phase} gamePhase={gamePhase} runId={runId} />
+      </div>
+
+      {screen === "menu" && (
+        <div className="stage-overlay">
+          <Lobby onStarted={handleStarted} createSession={createSession} />
+        </div>
+      )}
+
+      {screen === "in-run" && (
+        <InRun
+          session={session}
+          onStateChange={(i, p) => {
+            setSwingIndex(i);
+            setPhase(p);
+          }}
+          onFinished={(r) => {
+            clearSession();
+            setResult(r);
+            setScreen("result");
+          }}
+        />
+      )}
+
+      {screen === "result" && (
+        <div className="stage-overlay">
+          <Result result={result!} onPlayAgain={() => setScreen("menu")} />
+        </div>
+      )}
+    </div>
   );
 }
 

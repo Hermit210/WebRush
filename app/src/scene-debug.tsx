@@ -32,7 +32,7 @@ function DebugHarness() {
 
   return (
     <div style={{ width: "100vw", height: "100vh" }} data-testid="scene-debug-root">
-      <Scene swingIndex={swingIndex} phase={phase} />
+      <Scene swingIndex={swingIndex} phase={phase} gamePhase="active" runId={0} />
       <div
         data-testid="scene-debug-status"
         style={{ position: "absolute", top: 8, left: 8, color: "#4dd0ff", fontFamily: "monospace" }}

@@ -7,7 +7,6 @@ import {
   estimatedPayoutLamports,
   multiplierAt,
 } from "../anchor/constants";
-import { Scene } from "../three/Scene";
 import type { SwingPhase } from "../three/SwingRig";
 
 export type RunResult =
@@ -29,15 +28,20 @@ const CASHOUT_ANIMATION_MS = 1000;
  * session is available, so the run still works either way rather than
  * silently failing.
  *
- * The 3D <Scene> below is a pure rendering swap over the old <Skyline>
- * canvas -- it reacts to the exact same swingIndex/phase data derived from
- * on-chain state here, no new game logic lives in the 3D layer itself.
+ * Renders only the HUD overlay content, NOT the 3D <Scene>/canvas itself --
+ * that's mounted once, continuously, by the parent (App.tsx's GameFlow) so
+ * it never remounts between menu/in-run/result. This component reports its
+ * swingIndex/phase up via `onStateChange` so that single shared <Scene> can
+ * render the live run; the actual tick()/swing-transaction logic below is
+ * unchanged from before that split.
  */
 export function InRun({
   session,
+  onStateChange,
   onFinished,
 }: {
   session: SessionHandle | null;
+  onStateChange?: (swingIndex: number, phase: SwingPhase) => void;
   onFinished: (result: RunResult) => void;
 }) {
   const ctx = useWebRushProgram();
@@ -48,6 +52,10 @@ export function InRun({
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const finishedRef = useRef(false);
+
+  useEffect(() => {
+    onStateChange?.(swingIndex, phase);
+  }, [swingIndex, phase, onStateChange]);
 
   useEffect(() => {
     if (!ctx) return;
@@ -167,11 +175,7 @@ export function InRun({
   const finished = phase === "missed" || phase === "cashed_out";
 
   return (
-    <div className="game-stage">
-      <div className="game-canvas">
-        <Scene swingIndex={swingIndex} phase={phase} />
-      </div>
-
+    <>
       <div className="hud-overlay hud-top">
         {error && <div className="error-banner">{error}</div>}
         {statusMsg && (
@@ -203,6 +207,6 @@ export function InRun({
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
