@@ -8,7 +8,15 @@ pub mod state;
 
 pub use instructions::*;
 
-declare_id!("8o3RF97HDqRQ7jVEviaYDmiMnGVCwck22XeezGwkYNnU");
+// Separate program ID from the shared devnet deployment used by every
+// other branch -- deliberate isolation, not an oversight. A raw-instruction
+// test (tests/session-keys-raw-compat.ts) proved that upgrading the shared
+// program in place would have broken every other branch's existing
+// swing() calls (anchor-lang 1.1.2's Option<Account> handling requires the
+// trailing account slot to be present, even as a placeholder -- an old
+// client that doesn't know sessionToken exists can never supply that, and
+// hits AccountNotEnoughKeys). See README "Session keys" for the full story.
+declare_id!("D2Jk64MauFmg8GhWoe7C2AqLFdQqjTayb5iy2hqrsBFS");
 
 /// `#[ephemeral]` wires up the undelegation callback handling this program
 /// needs to be usable from a MagicBlock Ephemeral Rollup (required for

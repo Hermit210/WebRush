@@ -1,20 +1,41 @@
 use anchor_lang::prelude::*;
+use session_keys::{session_auth_or, Session, SessionError, SessionTokenV2};
 
 use crate::constants::{MAX_SWING_INDEX, MISS_PROBABILITY_BPS, MULTIPLIER_TABLE_X100, RUN_SEED};
 use crate::errors::WebRushError;
 use crate::state::{Run, RunStatus};
 
-#[derive(Accounts)]
+/// `session_token` is a TRAILING optional account. A hand-built raw
+/// instruction test (tests/session-keys-raw-compat.ts) proved Anchor's
+/// on-chain `Option<Account>` deserialization (anchor-lang 1.1.2) rejects a
+/// genuinely-shorter accounts list with `AccountNotEnoughKeys` rather than
+/// treating the missing slot as `None` -- so this program could NOT have
+/// been upgraded in place on the shared devnet deployment without breaking
+/// every other branch's already-compiled `swing()` calls (they never send
+/// this slot at all). That's why this program is deployed at its own
+/// isolated address instead -- see README "Session keys" for the full
+/// reasoning and the isolated program ID.
+///
+/// The `player` account keeps its original name (not renamed to `payer`
+/// like the upstream session-keys reference example) purely for continuity
+/// with the rest of this codebase's naming.
+#[derive(Accounts, Session)]
 pub struct Swing<'info> {
+    #[account(mut)]
     pub player: Signer<'info>,
 
     #[account(
         mut,
-        seeds = [RUN_SEED, player.key().as_ref()],
+        seeds = [RUN_SEED, run.player.as_ref()],
         bump = run.bump,
-        has_one = player,
     )]
     pub run: Account<'info, Run>,
+
+    /// CHECK: validated by the `session_auth_or` macro against `run.player`
+    /// -- if present, its authority must match run.player and it must not
+    /// be expired; if absent, `player` must equal `run.player` directly.
+    #[session(signer = player, authority = run.player.key())]
+    pub session_token: Option<Account<'info, SessionTokenV2>>,
 }
 
 #[event]
@@ -35,6 +56,14 @@ pub struct SwingResolved {
 /// ephemeral-rollup-delegated copy of the Run account during a session, so
 /// each swing is a sub-50ms ER transaction rather than a base-layer one.
 ///
+/// Session-key aware (see Swing accounts struct doc comment above): a
+/// player may call this directly with their real wallet (unchanged, original
+/// behavior), OR via a scoped session key created once via
+/// `@magicblock-labs/gum-sdk`'s `createSessionV2` -- this is what removes
+/// the wallet-popup-per-swing problem. `cash_out` deliberately does NOT
+/// accept a session token; cashing out always requires the real wallet, by
+/// design, per the security model documented in the README.
+///
 /// Randomness (MVP fallback, explicitly NOT full VRF -- see spec section
 /// 3.1): an xorshift64 mix of run.seed, the player key, swing_index, and
 /// the current slot, truncated to a 0-9999 roll compared against
@@ -46,6 +75,10 @@ pub struct SwingResolved {
 /// in magicblock-labs/magicblock-engine-examples/roll-dice
 /// (roll-dice-delegated program) -- that example is a near-exact template
 /// for this instruction.
+#[session_auth_or(
+    ctx.accounts.run.player.key() == ctx.accounts.player.key(),
+    SessionError::InvalidToken
+)]
 pub fn swing_handler(ctx: Context<Swing>) -> Result<()> {
     let run = &mut ctx.accounts.run;
     require!(run.status == RunStatus::Active, WebRushError::RunNotActive);
