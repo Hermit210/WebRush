@@ -1,0 +1,20 @@
+RobotExpressive.glb
+
+Model by Tomas Laulhe (https://www.patreon.com/quaternius) -- CC0 1.0
+(public domain, no attribution required). Consider supporting the
+creator's Patreon anyway.
+
+glTF conversion and modifications (added 3 facial expression morph
+targets, converted with FBX2GLTF, removed duplicate materials, reduced
+material metalness) by Don McCurdy (https://donmccurdy.com/).
+
+Source: https://github.com/mrdoob/three.js/tree/dev/examples/models/gltf/RobotExpressive
+(three.js's own official example asset library.)
+
+Recolored in-engine (emissive cyan/magenta materials) for this project --
+see app/src/three/Character.tsx. Not a custom-modeled "web-swinging hero";
+used as the closest freely and directly fetchable rigged+animated glTF
+substitute for Mixamo/Ready Player Me, which both require an interactive
+account/export flow that couldn't be automated in this session. See the
+project README's "3D visual layer" section for the reasoning and the
+suggested upgrade path if a real Mixamo/RPM export becomes available.
