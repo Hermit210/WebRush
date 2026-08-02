@@ -5,6 +5,10 @@ import {
   useWallet,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
+import {
+  PhantomWalletAdapter,
+  SolflareWalletAdapter,
+} from "@solana/wallet-adapter-wallets";
 import "@solana/wallet-adapter-react-ui/styles.css";
 
 import { RPC_ENDPOINT } from "./anchor/program";
@@ -41,9 +45,15 @@ function GameFlow() {
 }
 
 export default function App() {
-  // Wallet Standard auto-detects installed wallets (Phantom, Solflare, etc)
-  // without needing explicit adapter packages here.
-  const wallets = useMemo(() => [], []);
+  // Explicit adapters, not just ambient Wallet Standard auto-detection --
+  // "Wallet Standard" is a generic multi-chain discovery protocol, not
+  // Solana-exclusive, and other installed extensions (e.g. MetaMask, which
+  // also registers itself through it) can otherwise get surfaced instead of
+  // Phantom. Pinning these makes Phantom/Solflare deterministic entries.
+  const wallets = useMemo(
+    () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
+    []
+  );
 
   return (
     <ConnectionProvider endpoint={RPC_ENDPOINT}>
