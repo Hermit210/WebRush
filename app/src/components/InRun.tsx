@@ -5,11 +5,18 @@ import {
   estimatedPayoutLamports,
   multiplierAt,
 } from "../anchor/constants";
-import { Skyline } from "./Skyline";
+import { Scene } from "../three/Scene";
+import type { SwingPhase } from "../three/SwingRig";
 
 export type RunResult =
   | { outcome: "cashed_out"; payoutLamports: number; multiplier: number }
   | { outcome: "missed"; multiplier: number };
+
+// Lets the fall/settle animation actually play before switching to the
+// Result screen -- onFinished used to fire the instant the tx confirmed,
+// which cut the 3D miss/cash-out animation off before it could be seen.
+const MISS_ANIMATION_MS = 1600;
+const CASHOUT_ANIMATION_MS = 1000;
 
 /**
  * Auto-swing loop: calls the on-chain `swing` instruction on an interval
@@ -21,11 +28,16 @@ export type RunResult =
  * only start_run/cash_out need the player's real wallet, matching the
  * "session key" pattern in magicblock-engine-examples/session-keys and
  * used by solsocket for its zero-fee presence writes.
+ *
+ * The 3D <Scene> below is a pure rendering swap over the old <Skyline>
+ * canvas -- it reacts to the exact same swingIndex/phase data derived from
+ * on-chain state here, no new game logic lives in the 3D layer itself.
  */
 export function InRun({ onFinished }: { onFinished: (result: RunResult) => void }) {
   const ctx = useWebRushProgram();
   const [swingIndex, setSwingIndex] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<SwingPhase>("idle");
   const [statusMsg, setStatusMsg] = useState<string | null>("Delegating to rollup...");
   const [error, setError] = useState<string | null>(null);
   const finishedRef = useRef(false);
@@ -35,16 +47,16 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
 
-    // NOTE: delegate_run is intentionally not called yet in this scaffold --
-    // it requires an ephemeral-rollup validator endpoint to be wired up
-    // (see README "Testing ER delegation"). swing() below still works fine
-    // called directly against base layer while that's pending; it's just
-    // not yet running at ER speed.
+    // NOTE: delegate_run is intentionally not called yet from the frontend --
+    // it's verified working end-to-end against the real devnet ER via
+    // scripts/test-er.ts, but wiring it into this UI (so swing() below runs
+    // at ER speed instead of base layer) is still open, see README.
     setStatusMsg(null);
 
     async function tick() {
       if (cancelled || finishedRef.current || !ctx) return;
       setBusy(true);
+      setPhase("swinging");
       try {
         const sig = await ctx.program.methods
           .swing()
@@ -56,14 +68,20 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
 
         if (status.missed) {
           finishedRef.current = true;
-          onFinished({ outcome: "missed", multiplier: multiplierAt(run.swingIndex) });
+          setSwingIndex(run.swingIndex);
+          setPhase("missed");
+          setTimeout(() => {
+            onFinished({ outcome: "missed", multiplier: multiplierAt(run.swingIndex) });
+          }, MISS_ANIMATION_MS);
           return;
         }
         setSwingIndex(run.swingIndex);
+        setPhase("idle");
         if (!cancelled && !finishedRef.current) {
           timer = setTimeout(tick, 2000);
         }
       } catch (err: any) {
+        setPhase("idle");
         setError(err?.message ?? String(err));
       } finally {
         setBusy(false);
@@ -87,11 +105,12 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
         .accounts({ player: ctx.wallet.publicKey })
         .rpc();
       await ctx.connection.confirmTransaction(sig, "confirmed");
-      onFinished({
-        outcome: "cashed_out",
-        payoutLamports: estimatedPayoutLamports(ENTRY_FEE_LAMPORTS, swingIndex),
-        multiplier: multiplierAt(swingIndex),
-      });
+      setPhase("cashed_out");
+      const payoutLamports = estimatedPayoutLamports(ENTRY_FEE_LAMPORTS, swingIndex);
+      const multiplier = multiplierAt(swingIndex);
+      setTimeout(() => {
+        onFinished({ outcome: "cashed_out", payoutLamports, multiplier });
+      }, CASHOUT_ANIMATION_MS);
     } catch (err: any) {
       finishedRef.current = false;
       setError(err?.message ?? String(err));
@@ -104,35 +123,45 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
   const multiplier = multiplierAt(swingIndex);
   const payout = estimatedPayoutLamports(ENTRY_FEE_LAMPORTS, swingIndex);
   const risky = swingIndex >= 6;
+  const finished = phase === "missed" || phase === "cashed_out";
 
   return (
-    <div className="card">
-      <Skyline swingIndex={swingIndex} falling={false} />
+    <div className="game-stage">
+      <div className="game-canvas">
+        <Scene swingIndex={swingIndex} phase={phase} />
+      </div>
 
-      {error && <div className="error-banner">{error}</div>}
-      {statusMsg && (
-        <div className="status-line">
-          <span className="spinner" />
-          {statusMsg}
-        </div>
-      )}
+      <div className="hud-overlay hud-top">
+        {error && <div className="error-banner">{error}</div>}
+        {statusMsg && (
+          <div className="status-line">
+            <span className="spinner" />
+            {statusMsg}
+          </div>
+        )}
+        <p className={`multiplier ${risky ? "danger" : "growing"}`}>
+          {multiplier.toFixed(2)}x
+        </p>
+        <p className="payout-preview">
+          Cash out now for ~{(payout / 1e9).toFixed(4)} SOL
+        </p>
+      </div>
 
-      <p className={`multiplier ${risky ? "danger" : "growing"}`}>
-        {multiplier.toFixed(2)}x
-      </p>
-      <p className="payout-preview">
-        Cash out now for ~{(payout / 1e9).toFixed(4)} SOL
-      </p>
-
-      <button className="btn-cashout" onClick={handleCashOut} disabled={!!statusMsg}>
-        Cash Out
-      </button>
-      {busy && (
-        <div className="status-line" style={{ justifyContent: "center" }}>
-          <span className="spinner" />
-          Swinging...
-        </div>
-      )}
+      <div className="hud-overlay hud-bottom">
+        <button
+          className="btn-cashout"
+          onClick={handleCashOut}
+          disabled={!!statusMsg || finished}
+        >
+          Cash Out
+        </button>
+        {busy && (
+          <div className="status-line" style={{ justifyContent: "center" }}>
+            <span className="spinner" />
+            Swinging...
+          </div>
+        )}
+      </div>
     </div>
   );
 }

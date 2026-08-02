@@ -14,3 +14,4 @@ app/dist
 app/tsconfig.tsbuildinfo
 .claude/
 scripts/*.png
+*.deb
