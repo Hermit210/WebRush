@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useWebRushProgram } from "../hooks/useWebRushProgram";
+import { useSound } from "../hooks/useSound";
 import {
   ENTRY_FEE_LAMPORTS,
   estimatedPayoutLamports,
@@ -35,6 +36,7 @@ const CASHOUT_ANIMATION_MS = 1000;
  */
 export function InRun({ onFinished }: { onFinished: (result: RunResult) => void }) {
   const ctx = useWebRushProgram();
+  const playSound = useSound();
   const [swingIndex, setSwingIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<SwingPhase>("idle");
@@ -70,6 +72,7 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
           finishedRef.current = true;
           setSwingIndex(run.swingIndex);
           setPhase("missed");
+          playSound("miss");
           setTimeout(() => {
             onFinished({ outcome: "missed", multiplier: multiplierAt(run.swingIndex) });
           }, MISS_ANIMATION_MS);
@@ -77,6 +80,7 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
         }
         setSwingIndex(run.swingIndex);
         setPhase("idle");
+        playSound("tick");
         if (!cancelled && !finishedRef.current) {
           timer = setTimeout(tick, 2000);
         }
@@ -97,6 +101,7 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
 
   async function handleCashOut() {
     if (!ctx || finishedRef.current) return;
+    playSound("click");
     finishedRef.current = true;
     setStatusMsg("Confirming cash-out...");
     try {
@@ -106,6 +111,7 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
         .rpc();
       await ctx.connection.confirmTransaction(sig, "confirmed");
       setPhase("cashed_out");
+      playSound("cashout");
       const payoutLamports = estimatedPayoutLamports(ENTRY_FEE_LAMPORTS, swingIndex);
       const multiplier = multiplierAt(swingIndex);
       setTimeout(() => {

@@ -164,6 +164,16 @@ Not yet merged; branched off `main`. Restructures the app's opening flow to read
 
 **Verified with real headless-browser screenshots** (`scripts/check-shell.mjs`), not just assumed from reading the code: confirmed the menu genuinely renders with zero wallet connected (entry fee/multiplier info and the Play button all visible, corner pill reads "Select Wallet"), and that clicking Play while disconnected opens the picker modal (Phantom/Solflare listed) rather than silently failing or requiring the corner pill to be found first. Zero uncaught errors across all three captured states (splash, menu, post-Play-click modal).
 
+## Stage C: sound design (branch: `stage-c-sound`)
+
+Not yet merged; branched off `main`. Only item #5 from the Stage C list -- item #1 (risk-profile selection) was deliberately **not** attempted: it requires changing the on-chain `Run` account's structure, and since `main`/`2d-safe-fallback`/`stage-a-hud`/`stage-b-multiplayer` all share the exact same live devnet program, a careless account-layout change risks breaking every existing `Run` account across every wallet that's ever used it (mine included) -- not a risk worth taking casually mid-hackathon without a real migration plan. Sound design carries zero such risk (frontend-only), which is why it's the one built here.
+
+**Assets:** Kenney's "Interface Sounds" pack (CC0 1.0, license verified directly from the `License.txt` bundled inside the pack's own zip, not assumed from the site's branding) -- `tick_001.ogg` → multiplier tick-up, `confirmation_002.ogg` → cash-out, `error_003.ogg` → miss, `click_002.ogg` → button feedback. See `app/public/audio/LICENSE.txt`.
+
+**`useSound.ts`**: caches one `Audio` element per clip, clones it per playback so overlapping triggers (e.g. clicking Cash Out right as a tick lands) don't cut each other off. Swallows autoplay-blocked errors silently -- harmless, since the next click/swing (a real user gesture) always succeeds.
+
+**Verified, not assumed:** headless-browser check (`scripts/check-sound.mjs`) confirms clicking Play actually fires a real network request for `click.ogg` (not just that the code compiles) with zero uncaught errors. Actually *hearing* it, and judging volume/timing feel, needs your own browser with audio.
+
 ## Known rough edges / next steps
 
 - **Wallet-popup-per-swing**: `InRun.tsx`'s auto-swing loop currently signs each `swing()` call with the connected wallet on a ~2s timer, which means a wallet prompt every swing. Fine for a scaffold, bad for a live demo. The fix is a per-session burner keypair authorized to sign swings on the player's behalf once delegated to the ER — see `magicblock-engine-examples/session-keys` for the pattern, or reuse `solsocket`'s auto-managed session key if the collaboration/multiplayer layer gets built.

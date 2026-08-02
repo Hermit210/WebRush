@@ -1,0 +1,16 @@
+tick.ogg, cashout.ogg, miss.ogg, click.ogg
+
+Source: Kenney "Interface Sounds" pack (v1.0, 11-02-2020)
+https://kenney.nl/assets/interface-sounds
+Original filenames: tick_001.ogg, confirmation_002.ogg, error_003.ogg,
+click_002.ogg respectively -- renamed here to match their use in WebRush.
+
+Created/distributed by Kenney (www.kenney.nl).
+
+License: CC0 1.0 (Creative Commons Zero / public domain)
+http://creativecommons.org/publicdomain/zero/1.0/
+Free to use in personal, educational, and commercial projects. Credit is
+appreciated but not required -- credited here anyway: Kenney (kenney.nl).
+
+Verified directly from the License.txt bundled inside the pack's own zip,
+not assumed from the site's general branding.
