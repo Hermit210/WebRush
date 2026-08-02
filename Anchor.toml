@@ -6,13 +6,27 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-webrush = "8o3RF97HDqRQ7jVEviaYDmiMnGVCwck22XeezGwkYNnU"
+webrush = "D2Jk64MauFmg8GhWoe7C2AqLFdQqjTayb5iy2hqrsBFS"
 
 [programs.devnet]
-webrush = "8o3RF97HDqRQ7jVEviaYDmiMnGVCwck22XeezGwkYNnU"
+# Deliberately a SEPARATE program ID from the shared devnet deployment used
+# by every other branch -- see lib.rs declare_id! comment and README
+# "Session keys" for why upgrading the shared program in place was proven
+# unsafe rather than just assumed risky.
+webrush = "D2Jk64MauFmg8GhWoe7C2AqLFdQqjTayb5iy2hqrsBFS"
 
 [registry]
 url = "https://api.apr.dev"
+
+# Clones MagicBlock's gpl_session program (used by @magicblock-labs/gum-sdk
+# for session-token creation/validation) from devnet onto the local test
+# validator, so session-key flows can be tested on localnet -- fresh test
+# validators don't have it deployed otherwise.
+[[test.validator.clone]]
+address = "KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5"
+
+[test.validator]
+url = "https://api.devnet.solana.com"
 
 [provider]
 # Local dev/test loop runs against solana-test-validator (fast, free, and

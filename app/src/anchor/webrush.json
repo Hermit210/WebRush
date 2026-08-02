@@ -1,5 +1,5 @@
 {
-  "address": "8o3RF97HDqRQ7jVEviaYDmiMnGVCwck22XeezGwkYNnU",
+  "address": "D2Jk64MauFmg8GhWoe7C2AqLFdQqjTayb5iy2hqrsBFS",
   "metadata": {
     "name": "webrush",
     "version": "0.1.0",
@@ -125,38 +125,38 @@
             "program": {
               "kind": "const",
               "value": [
-                115,
-                205,
-                66,
-                126,
-                67,
-                139,
-                93,
-                88,
-                45,
-                244,
-                195,
-                159,
-                66,
-                243,
-                250,
-                181,
-                13,
-                188,
-                144,
-                64,
-                209,
-                20,
-                66,
-                29,
-                47,
-                109,
-                207,
-                238,
+                178,
+                161,
+                226,
+                200,
+                43,
+                249,
+                214,
+                179,
+                183,
+                14,
+                7,
+                80,
+                239,
+                234,
+                226,
+                230,
+                24,
+                94,
+                97,
+                49,
+                232,
+                106,
                 254,
-                202,
-                245,
-                201
+                139,
+                197,
+                61,
+                224,
+                142,
+                5,
+                154,
+                119,
+                13
               ]
             }
           }
@@ -257,7 +257,7 @@
         },
         {
           "name": "owner_program",
-          "address": "8o3RF97HDqRQ7jVEviaYDmiMnGVCwck22XeezGwkYNnU"
+          "address": "D2Jk64MauFmg8GhWoe7C2AqLFdQqjTayb5iy2hqrsBFS"
         },
         {
           "name": "delegation_program",
@@ -526,10 +526,8 @@
       "accounts": [
         {
           "name": "player",
-          "signer": true,
-          "relations": [
-            "run"
-          ]
+          "writable": true,
+          "signer": true
         },
         {
           "name": "run",
@@ -546,10 +544,19 @@
               },
               {
                 "kind": "account",
-                "path": "player"
+                "path": "run.player",
+                "account": "Run"
               }
             ]
           }
+        },
+        {
+          "name": "session_token",
+          "docs": [
+            "-- if present, its authority must match run.player and it must not",
+            "be expired; if absent, `player` must equal `run.player` directly."
+          ],
+          "optional": true
         }
       ],
       "args": []
@@ -749,6 +756,34 @@
           },
           {
             "name": "Missed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SessionTokenV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "target_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "session_signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "valid_until",
+            "type": "i64"
           }
         ]
       }

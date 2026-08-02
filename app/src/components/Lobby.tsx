@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet, useAnchorWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useWebRushProgram } from "../hooks/useWebRushProgram";
 import { useSound } from "../hooks/useSound";
+import type { SessionHandle } from "../hooks/useSessionKey";
 import { ENTRY_FEE_LAMPORTS } from "../anchor/constants";
 
 /**
@@ -16,8 +17,15 @@ import { ENTRY_FEE_LAMPORTS } from "../anchor/constants";
  * connection completes -- no wallet-adapter/Anchor logic changed, just
  * when it gets invoked.
  */
-export function Lobby({ onStarted }: { onStarted: () => void }) {
+export function Lobby({
+  onStarted,
+  createSession,
+}: {
+  onStarted: () => void;
+  createSession: (wallet: NonNullable<ReturnType<typeof useAnchorWallet>>) => Promise<SessionHandle>;
+}) {
   const { connected } = useWallet();
+  const anchorWallet = useAnchorWallet();
   const { setVisible } = useWalletModal();
   const ctx = useWebRushProgram();
   const playSound = useSound();
@@ -26,7 +34,7 @@ export function Lobby({ onStarted }: { onStarted: () => void }) {
   const wantsToStartRef = useRef(false);
 
   async function actuallyStartRun() {
-    if (!ctx) return;
+    if (!ctx || !anchorWallet) return;
     setError(null);
     try {
       setStatus("Confirming transaction...");
@@ -37,6 +45,13 @@ export function Lobby({ onStarted }: { onStarted: () => void }) {
         .startRun()
         .accounts({ player: ctx.wallet.publicKey })
         .rpc();
+
+      // One more wallet approval here creates the session key -- this is
+      // what removes the wallet-popup-per-swing problem. Every swing after
+      // this point is signed silently by the session key until cash-out.
+      setStatus("Setting up session (one more approval)...");
+      await createSession(anchorWallet);
+
       onStarted();
     } catch (err: any) {
       setError(err?.message ?? String(err));

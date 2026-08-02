@@ -6,9 +6,14 @@ import idl from "./webrush.json";
 import type { Webrush } from "../../../target/types/webrush";
 import { RUN_SEED, TREASURY_SEED } from "./constants";
 
+// A SEPARATE, isolated program from the shared devnet deployment other
+// branches use -- see programs/webrush/src/lib.rs declare_id! comment and
+// README "Session keys" for why (a raw-instruction test proved upgrading
+// the shared program in place would have broken every other branch's
+// existing swing() calls).
 export const PROGRAM_ID = new PublicKey(
   import.meta.env.VITE_PROGRAM_ID ??
-    "8o3RF97HDqRQ7jVEviaYDmiMnGVCwck22XeezGwkYNnU"
+    "D2Jk64MauFmg8GhWoe7C2AqLFdQqjTayb5iy2hqrsBFS"
 );
 
 export const RPC_ENDPOINT =

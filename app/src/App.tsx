@@ -16,6 +16,7 @@ import { WalletCornerPill } from "./components/WalletCornerPill";
 import { Lobby } from "./components/Lobby";
 import { InRun, type RunResult } from "./components/InRun";
 import { Result } from "./components/Result";
+import { useSessionKey } from "./hooks/useSessionKey";
 
 type Screen = "splash" | "menu" | "in-run" | "result";
 
@@ -36,17 +37,28 @@ function GameFlow({
   setScreen: (s: Screen) => void;
 }) {
   const [result, setResult] = useState<RunResult | null>(null);
+  // Lifted here (not inside Lobby/InRun) so both can share the SAME
+  // session: Lobby creates it right after start_run, InRun uses it to sign
+  // swings silently -- see README "Session keys".
+  const { session, createSession, clearSession } = useSessionKey();
 
   if (screen === "splash") {
     return <Splash onDone={() => setScreen("menu")} />;
   }
   if (screen === "menu") {
-    return <Lobby onStarted={() => setScreen("in-run")} />;
+    return (
+      <Lobby
+        onStarted={() => setScreen("in-run")}
+        createSession={createSession}
+      />
+    );
   }
   if (screen === "in-run") {
     return (
       <InRun
+        session={session}
         onFinished={(r) => {
+          clearSession();
           setResult(r);
           setScreen("result");
         }}

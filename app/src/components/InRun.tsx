@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useWebRushProgram } from "../hooks/useWebRushProgram";
 import { useSound } from "../hooks/useSound";
+import type { SessionHandle } from "../hooks/useSessionKey";
 import {
   ENTRY_FEE_LAMPORTS,
   estimatedPayoutLamports,
@@ -20,27 +21,31 @@ const MISS_ANIMATION_MS = 1600;
 const CASHOUT_ANIMATION_MS = 1000;
 
 /**
- * Auto-swing loop: calls the on-chain `swing` instruction on an interval
- * while the run is active, and lets the player cash out at any time. Each
- * swing here is a normal wallet-signed transaction, which in practice means
- * a wallet prompt every ~2s -- acceptable for a devnet demo, but the
- * intended fix once the run is delegated to an ephemeral rollup (spec
- * section 3.2 / build order day 2-3) is a per-session burner keypair so
- * only start_run/cash_out need the player's real wallet, matching the
- * "session key" pattern in magicblock-engine-examples/session-keys and
- * used by solsocket for its zero-fee presence writes.
+ * Auto-swing loop. If a session key is available (created in Lobby right
+ * after start_run -- see App.tsx/useSessionKey.ts), each swing is signed
+ * directly by the in-memory session Keypair with ZERO wallet popups -- this
+ * is the actual fix for the "wallet prompt every ~2s" problem. Falls back
+ * to the original direct-wallet-signed path (one popup per swing) if no
+ * session is available, so the run still works either way rather than
+ * silently failing.
  *
  * The 3D <Scene> below is a pure rendering swap over the old <Skyline>
  * canvas -- it reacts to the exact same swingIndex/phase data derived from
  * on-chain state here, no new game logic lives in the 3D layer itself.
  */
-export function InRun({ onFinished }: { onFinished: (result: RunResult) => void }) {
+export function InRun({
+  session,
+  onFinished,
+}: {
+  session: SessionHandle | null;
+  onFinished: (result: RunResult) => void;
+}) {
   const ctx = useWebRushProgram();
   const playSound = useSound();
   const [swingIndex, setSwingIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<SwingPhase>("idle");
-  const [statusMsg, setStatusMsg] = useState<string | null>("Delegating to rollup...");
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const finishedRef = useRef(false);
 
@@ -49,21 +54,49 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
 
-    // NOTE: delegate_run is intentionally not called yet from the frontend --
-    // it's verified working end-to-end against the real devnet ER via
-    // scripts/test-er.ts, but wiring it into this UI (so swing() below runs
-    // at ER speed instead of base layer) is still open, see README.
-    setStatusMsg(null);
-
     async function tick() {
       if (cancelled || finishedRef.current || !ctx) return;
       setBusy(true);
       setPhase("swinging");
       try {
-        const sig = await ctx.program.methods
-          .swing()
-          .accounts({ player: ctx.wallet.publicKey })
-          .rpc();
+        let sig: string;
+        if (session) {
+          // Session-signed path: no wallet popup. `run`'s PDA must be
+          // passed explicitly -- its seeds are self-referential
+          // (derived from run.player, not the signer) precisely so the
+          // same Run account resolves whether the direct wallet or a
+          // session key is doing the signing, which means Anchor's
+          // client can no longer auto-derive it from context.
+          // `as any`: Anchor's generated type for this instruction's
+          // accounts object omits `run` entirely, on the (here, incorrect)
+          // assumption that anything with a `pda` seed spec is always
+          // auto-derivable client-side. That's not true for a
+          // self-referential seed (run.player) -- it genuinely cannot be
+          // computed without already knowing the value, so it must be
+          // passed explicitly despite what the type says. Verified working
+          // at runtime via tests/session-keys.ts, which does the same.
+          const swingTx = await ctx.program.methods
+            .swing()
+            .accounts({
+              player: session.sessionKeypair.publicKey,
+              run: ctx.run,
+              sessionToken: session.sessionTokenPda,
+            } as any)
+            .transaction();
+          swingTx.feePayer = session.sessionKeypair.publicKey;
+          swingTx.recentBlockhash = (
+            await ctx.connection.getLatestBlockhash()
+          ).blockhash;
+          swingTx.sign(session.sessionKeypair);
+          sig = await ctx.connection.sendRawTransaction(swingTx.serialize());
+        } else {
+          // Fallback: original direct-wallet path (one popup per swing).
+          // `as any` for the same reason as the session path above.
+          sig = await ctx.program.methods
+            .swing()
+            .accounts({ player: ctx.wallet.publicKey, run: ctx.run, sessionToken: null } as any)
+            .rpc();
+        }
         await ctx.connection.confirmTransaction(sig, "confirmed");
         const run = await ctx.program.account.run.fetch(ctx.run);
         const status = run.status as any;
@@ -97,7 +130,7 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [ctx]);
+  }, [ctx, session]);
 
   async function handleCashOut() {
     if (!ctx || finishedRef.current) return;
@@ -105,6 +138,8 @@ export function InRun({ onFinished }: { onFinished: (result: RunResult) => void 
     finishedRef.current = true;
     setStatusMsg("Confirming cash-out...");
     try {
+      // cash_out is deliberately NOT session-aware -- cashing out always
+      // requires the real wallet, by design (see README security model).
       const sig = await ctx.program.methods
         .cashOut()
         .accounts({ player: ctx.wallet.publicKey })
