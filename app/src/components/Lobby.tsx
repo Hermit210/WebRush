@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useWebRushProgram } from "../hooks/useWebRushProgram";
+import { useSound } from "../hooks/useSound";
 import { ENTRY_FEE_LAMPORTS } from "../anchor/constants";
 
 /**
@@ -19,6 +20,7 @@ export function Lobby({ onStarted }: { onStarted: () => void }) {
   const { connected } = useWallet();
   const { setVisible } = useWalletModal();
   const ctx = useWebRushProgram();
+  const playSound = useSound();
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const wantsToStartRef = useRef(false);
@@ -54,6 +56,7 @@ export function Lobby({ onStarted }: { onStarted: () => void }) {
   }, [ctx]);
 
   function handlePlayClick() {
+    playSound("click");
     if (!connected) {
       wantsToStartRef.current = true;
       setVisible(true);
