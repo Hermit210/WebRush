@@ -154,6 +154,16 @@ There's also a Magic Router (`https://devnet-router.magicblock.app`) that auto-r
 
 **Still not done / needs your actual browser + GPU to confirm:** real-world frame rate on your machine, cross-browser check, and whether the neon/bloom tuning reads as intended on a real display rather than a screenshot from software rendering.
 
+## Stage D: game shell / onboarding (branch: `stage-d-game-shell`)
+
+Not yet merged; branched off `main`. Restructures the app's opening flow to read like an actual game instead of a wallet gate -- per the UX research that wallet-first onboarding is a major drop-off point, players should see the game's branding and be able to browse before ever touching a wallet.
+
+- **`Splash.tsx`**: brief branded splash (auto-advances after ~1.6s, or click/tap to skip), no wallet UI present at all during this screen.
+- **`Lobby.tsx`** (the menu) no longer has an `if (!ctx) return null` gate -- it always renders its branding, entry-fee, and max-multiplier info regardless of connection state. The wallet is only actually required at the instant **Play** is clicked: if not yet connected, that click opens the wallet picker modal contextually (via `useWalletModal`'s `setVisible(true)`, the same modal the corner pill already uses) and automatically resumes `start_run` the moment the connection completes -- no double-click needed, and no changes to the underlying wallet-adapter/Anchor/game-state logic per spec section D.3.
+- **`WalletCornerPill.tsx`**: the wallet control moved to a small, persistent, fixed top-right pill (visible on menu/in-run/result, hidden during the splash) instead of gating the whole screen -- same `WalletMultiButton` component, just repositioned via CSS.
+
+**Verified with real headless-browser screenshots** (`scripts/check-shell.mjs`), not just assumed from reading the code: confirmed the menu genuinely renders with zero wallet connected (entry fee/multiplier info and the Play button all visible, corner pill reads "Select Wallet"), and that clicking Play while disconnected opens the picker modal (Phantom/Solflare listed) rather than silently failing or requiring the corner pill to be found first. Zero uncaught errors across all three captured states (splash, menu, post-Play-click modal).
+
 ## Known rough edges / next steps
 
 - **Wallet-popup-per-swing**: `InRun.tsx`'s auto-swing loop currently signs each `swing()` call with the connected wallet on a ~2s timer, which means a wallet prompt every swing. Fine for a scaffold, bad for a live demo. The fix is a per-session burner keypair authorized to sign swings on the player's behalf once delegated to the ER — see `magicblock-engine-examples/session-keys` for the pattern, or reuse `solsocket`'s auto-managed session key if the collaboration/multiplayer layer gets built.

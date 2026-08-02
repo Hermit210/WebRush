@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import {
   ConnectionProvider,
   WalletProvider,
-  useWallet,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import {
@@ -12,21 +11,36 @@ import {
 import "@solana/wallet-adapter-react-ui/styles.css";
 
 import { RPC_ENDPOINT } from "./anchor/program";
-import { ConnectScreen } from "./components/ConnectScreen";
+import { Splash } from "./components/Splash";
+import { WalletCornerPill } from "./components/WalletCornerPill";
 import { Lobby } from "./components/Lobby";
 import { InRun, type RunResult } from "./components/InRun";
 import { Result } from "./components/Result";
 
-type Screen = "lobby" | "in-run" | "result";
+type Screen = "splash" | "menu" | "in-run" | "result";
 
-function GameFlow() {
-  const { connected } = useWallet();
-  const [screen, setScreen] = useState<Screen>("lobby");
+/**
+ * Game shell: splash -> menu -> in-run -> result. Wallet connection is no
+ * longer a gate in front of everything (the old `if (!connected) return
+ * <ConnectScreen />`) -- the menu (Lobby) renders its branding/game info
+ * regardless of connection state, and only actually requires a wallet at
+ * the moment Play is clicked (see Lobby.tsx). The wallet control itself
+ * lives in the persistent corner pill (see App() below), not gating any
+ * screen transition here.
+ */
+function GameFlow({
+  screen,
+  setScreen,
+}: {
+  screen: Screen;
+  setScreen: (s: Screen) => void;
+}) {
   const [result, setResult] = useState<RunResult | null>(null);
 
-  if (!connected) return <ConnectScreen />;
-
-  if (screen === "lobby") {
+  if (screen === "splash") {
+    return <Splash onDone={() => setScreen("menu")} />;
+  }
+  if (screen === "menu") {
     return <Lobby onStarted={() => setScreen("in-run")} />;
   }
   if (screen === "in-run") {
@@ -40,7 +54,7 @@ function GameFlow() {
     );
   }
   return (
-    <Result result={result!} onPlayAgain={() => setScreen("lobby")} />
+    <Result result={result!} onPlayAgain={() => setScreen("menu")} />
   );
 }
 
@@ -54,6 +68,7 @@ export default function App() {
     () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
     []
   );
+  const [screen, setScreen] = useState<Screen>("splash");
 
   return (
     <ConnectionProvider endpoint={RPC_ENDPOINT}>
@@ -77,7 +92,10 @@ export default function App() {
       >
         <WalletModalProvider>
           <div className="app-shell">
-            <GameFlow />
+            {/* Hidden during splash -- pure branding moment, no
+                interactive/identity elements per spec section D.1. */}
+            {screen !== "splash" && <WalletCornerPill />}
+            <GameFlow screen={screen} setScreen={setScreen} />
           </div>
         </WalletModalProvider>
       </WalletProvider>

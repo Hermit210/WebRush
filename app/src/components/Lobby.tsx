@@ -1,13 +1,29 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useWebRushProgram } from "../hooks/useWebRushProgram";
 import { ENTRY_FEE_LAMPORTS } from "../anchor/constants";
 
+/**
+ * Menu/home screen. Renders its branding and game info regardless of
+ * wallet connection state -- a player can see everything here without
+ * connecting anything (spec section D.1: "player can browse/preview
+ * without connecting"). The wallet is only actually required at the exact
+ * moment of clicking Play: if not yet connected, this opens the wallet
+ * picker modal contextually (via useWalletModal, the same modal the
+ * corner pill already uses) and automatically resumes start_run once the
+ * connection completes -- no wallet-adapter/Anchor logic changed, just
+ * when it gets invoked.
+ */
 export function Lobby({ onStarted }: { onStarted: () => void }) {
+  const { connected } = useWallet();
+  const { setVisible } = useWalletModal();
   const ctx = useWebRushProgram();
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const wantsToStartRef = useRef(false);
 
-  async function handleStart() {
+  async function actuallyStartRun() {
     if (!ctx) return;
     setError(null);
     try {
@@ -27,7 +43,24 @@ export function Lobby({ onStarted }: { onStarted: () => void }) {
     }
   }
 
-  if (!ctx) return null;
+  // If the player clicked Play before connecting, resume automatically the
+  // moment a wallet becomes available -- they already expressed intent to
+  // play, so don't make them click Play twice.
+  useEffect(() => {
+    if (wantsToStartRef.current && ctx) {
+      wantsToStartRef.current = false;
+      actuallyStartRun();
+    }
+  }, [ctx]);
+
+  function handlePlayClick() {
+    if (!connected) {
+      wantsToStartRef.current = true;
+      setVisible(true);
+      return;
+    }
+    actuallyStartRun();
+  }
 
   return (
     <div className="card">
@@ -52,8 +85,8 @@ export function Lobby({ onStarted }: { onStarted: () => void }) {
         </div>
       )}
 
-      <button className="btn-primary" onClick={handleStart} disabled={!!status} style={{ marginTop: 20 }}>
-        {status ? "Starting..." : "Start Run"}
+      <button className="btn-primary" onClick={handlePlayClick} disabled={!!status} style={{ marginTop: 20 }}>
+        {status ? "Starting..." : "Play"}
       </button>
     </div>
   );
