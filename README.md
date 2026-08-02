@@ -7,9 +7,10 @@ Core loop: pay a small entry fee, swing building to building while the multiplie
 ## Status
 
 - [x] Anchor program: entry-fee escrow, multiplier ticks, cash-out, miss/forfeit — **built and passing 7/7 localnet tests**
-- [x] MagicBlock Ephemeral Rollup delegate/undelegate instructions wired up (per verified `magicblock-labs/magicblock-engine-examples` pattern) — **not yet exercised against a live ER validator**, see below
-- [x] Frontend scaffold: wallet connect → lobby → in-run → result, wired to the real IDL
-- [ ] Actually calling `delegate_run` from the frontend / testing against an ER validator (day 2-3 per the build order)
+- [x] Devnet deploy, live: program `8o3RF97HDqRQ7jVEviaYDmiMnGVCwck22XeezGwkYNnU`, Treasury bankroll initialized and funded
+- [x] MagicBlock Ephemeral Rollup delegation — **verified end-to-end against the real hosted devnet ER** (`devnet-us.magicblock.app`), not just compile-checked. See "Testing ER delegation" below.
+- [x] Frontend scaffold: wallet connect → lobby → in-run → result, wired to the real IDL, Phantom/Solflare explicitly configured
+- [ ] Calling `delegate_run`/`undelegate_run` from the frontend itself (currently only exercised via `scripts/test-er.ts`; the running app still calls `swing` against base layer directly)
 - [ ] Shared-multiplier collaboration mode / `solsocket` integration (stretch goal, only after solo mode is rock solid)
 
 ## Project layout
@@ -28,6 +29,7 @@ programs/webrush/src/
     delegate.rs               -- delegate_run / undelegate_run (MagicBlock ER)
 tests/webrush.ts           -- localnet mocha test suite (the source of truth for expected behavior)
 scripts/bootstrap.ts        -- one-time treasury init + bankroll funding, any cluster
+scripts/test-er.ts           -- real end-to-end ER delegation test against devnet (not a compile check)
 app/                          -- React + Vite frontend
 ```
 
@@ -100,9 +102,31 @@ The frontend reads the IDL from `app/src/anchor/webrush.json`, which is already 
 
 **Verified so far**: `npm run build` (full `tsc -b` type-check + `vite build`) passes clean, and `npm run dev` boots the Vite server. **Not yet verified**: actually clicking through the connect → lobby → in-run → cash-out flow in a real browser against a live wallet -- that's the natural next step before calling the solo loop demo-ready.
 
-## Testing ER delegation (not yet done)
+## Testing ER delegation
 
-`delegate_run` / `undelegate_run` compile and their IDL accounts (`buffer_run`, `delegation_record_run`, `delegation_metadata_run`, etc.) were auto-generated correctly by the `#[delegate]`/`#[commit]` macros from `ephemeral-rollups-sdk`, confirming the account structure lines up with MagicBlock's expected pattern — but they haven't been exercised against a real ephemeral rollup validator yet, since that needs either a local ER validator or a devnet ER endpoint (see https://docs.magicblock.gg/pages/get-started/how-integrate-your-program/local-setup for picking a validator/router endpoint). That's the next concrete step (day 2-3 in the build order), along with actually calling `delegate_run` from the frontend before the swing loop starts and `undelegate_run` after cash-out/miss.
+**Verified working end-to-end against MagicBlock's real hosted devnet ER** — not a compile check. `scripts/test-er.ts` runs the full round trip against the live program:
+
+```bash
+ANCHOR_PROVIDER_URL=https://api.devnet.solana.com \
+ANCHOR_WALLET=~/.config/solana/id.json \
+npx ts-node scripts/test-er.ts
+```
+
+It does, against real infrastructure: `start_run` (base layer) → `delegate_run` (base layer, targeting the US ER validator `MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd`) → confirms the Run PDA's on-chain **owner actually changed** to the delegation program (`DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh`) → three real `swing` calls sent to `https://devnet-us.magicblock.app` (the ER's RPC) → `undelegate_run` (called against the ER connection, which commits final state back and hands ownership back to our program) → confirms ownership **reverted** to our program on base layer → `cash_out` on base layer using the ER-produced final state.
+
+No local validator needed — MagicBlock hosts public devnet ER endpoints per region:
+
+| Region | RPC | WS | Validator pubkey |
+|---|---|---|---|
+| US | `https://devnet-us.magicblock.app` | `wss://devnet-us.magicblock.app` | `MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd` |
+| EU | `https://devnet-eu.magicblock.app` | `wss://devnet-eu.magicblock.app` | `MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e` |
+| Asia | `https://devnet-as.magicblock.app` | `wss://devnet-as.magicblock.app` | `MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57` |
+
+There's also a Magic Router (`https://devnet-router.magicblock.app`) that auto-routes a transaction to either the ER or base layer based on account ownership, if you'd rather not manage two separate connections manually.
+
+**Note on the swing round-trip times** (~1.7–2.7s each in the test output): that's Anchor's client-side confirmation-polling overhead for this shell talking to the ER over the network, not the ER's own internal block time (MagicBlock advertises ~10ms internal blocks) — don't read those numbers as "the ER isn't actually fast."
+
+**Not yet done**: the frontend itself still calls `swing` directly against base layer (see `InRun.tsx`) rather than delegating first — wiring `delegate_run`/`undelegate_run` into the actual UI flow is the next step to get real ER speed in the live app, not just in this test script.
 
 ## Known rough edges / next steps
 
