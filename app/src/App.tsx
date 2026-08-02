@@ -57,7 +57,24 @@ export default function App() {
 
   return (
     <ConnectionProvider endpoint={RPC_ENDPOINT}>
-      <WalletProvider wallets={wallets} autoConnect>
+      {/*
+        Dedicated localStorageKey: WalletProvider persists the selected
+        wallet's name under this key and reconnects to it directly on next
+        visit -- clicking Connect Wallet skips the picker modal entirely
+        whenever a name is already stored (see BaseWalletMultiButton's
+        'has-wallet' case, which calls onConnect() instead of opening the
+        modal). The default key ('walletName') could hold a stale value
+        from testing before PhantomWalletAdapter was wired in (e.g. an
+        ambient-detected MetaMask entry), which would keep reconnecting to
+        it regardless of what's in the `wallets` array above. A dedicated
+        key guarantees this app never reads a value written by an earlier,
+        differently-configured version of itself.
+      */}
+      <WalletProvider
+        wallets={wallets}
+        autoConnect
+        localStorageKey="webrush-wallet-name"
+      >
         <WalletModalProvider>
           <div className="app-shell">
             <GameFlow />
