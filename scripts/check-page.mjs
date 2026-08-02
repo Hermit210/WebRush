@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 
 const browser = await chromium.launch();
-const page = await browser.newPage();
+const page = await browser.newPage({ viewport: { width: 480, height: 640 } });
 
 const consoleMessages = [];
 const pageErrors = [];
@@ -12,16 +12,21 @@ await page.goto("http://localhost:5173", { waitUntil: "networkidle" });
 await page.waitForTimeout(1500);
 
 const bodyText = await page.evaluate(() => document.body.innerText);
-const hasConnectButton = await page.evaluate(() =>
-  !!document.querySelector("button")
-);
+await page.screenshot({ path: "scripts/main-landing-screenshot.png" });
 
-console.log("=== Body text ===");
+await page.click("text=Select Wallet");
+await page.waitForTimeout(500);
+const modalText = await page.evaluate(() => document.body.innerText);
+await page.screenshot({ path: "scripts/main-wallet-modal-screenshot.png" });
+
+console.log("=== body text (landing) ===");
 console.log(bodyText || "(empty)");
-console.log("=== Has any <button> ===", hasConnectButton);
-console.log("=== Console messages ===");
+console.log("=== body text (after clicking Select Wallet) ===");
+console.log(modalText || "(empty)");
+console.log("=== console messages ===");
 consoleMessages.forEach((m) => console.log(m));
-console.log("=== Uncaught page errors ===");
+console.log("=== uncaught page errors ===");
 pageErrors.forEach((e) => console.log(e));
+console.log("=== screenshot saved ===");
 
 await browser.close();
