@@ -30,13 +30,11 @@ async function main() {
   const existing = await program.account.treasury.fetchNullable(treasuryPda);
   if (!existing) {
     console.log("Initializing treasury at", treasuryPda.toBase58());
+    // treasury / systemProgram are auto-resolved by the Anchor client from
+    // the IDL's PDA seed info; only the signer needs to be passed.
     await program.methods
       .initializeTreasury()
-      .accounts({
-        payer: provider.wallet.publicKey,
-        treasury: treasuryPda,
-        systemProgram: SystemProgram.programId,
-      })
+      .accounts({ payer: provider.wallet.publicKey })
       .rpc();
   } else {
     console.log("Treasury already initialized at", treasuryPda.toBase58());

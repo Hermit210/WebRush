@@ -5,6 +5,12 @@ export default defineConfig({
   plugins: [react()],
   define: {
     "process.env": {},
+    global: "globalThis",
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      define: { global: "globalThis" },
+    },
   },
   server: {
     port: 5173,
