@@ -13,6 +13,17 @@ Core loop: pay a small entry fee, swing building to building while the multiplie
 - [ ] Calling `delegate_run`/`undelegate_run` from the frontend itself (currently only exercised via `scripts/test-er.ts`; the running app still calls `swing` against base layer directly)
 - [ ] Shared-multiplier collaboration mode / `solsocket` integration (stretch goal, only after solo mode is rock solid)
 
+## Branch status (honest comparison, as of this session)
+
+The `## Status` list above is from the original build and predates the branch structure below. This table reflects what's actually merged, what's been verified and by what means, and what's still waiting on your own real-browser/real-wallet confirmation.
+
+| Branch | Merged into `main`? | What it adds | Verified by me (headless/automated) | Still needs your confirmation |
+|---|---|---|---|---|
+| `2d-safe-fallback` | N/A -- predates `main`'s 3D work, kept as a rollback point | Original 2D scaffold, no 3D/sound/session-keys | -- | You confirmed this passed a full manual test earlier this session |
+| `main` | -- | `3d-upgrade` + Stage A (3D HUD) + Stage D (game shell/onboarding) + Stage C (sound), all merged | Headless checks passed for each stage individually at merge time | A fresh full manual walkthrough of `main` **with all three merged together** hasn't been explicitly re-confirmed by you since Stage C merged -- worth one more pass before calling it demo-ready |
+| `stage-b-multiplayer` | Not merged (2 commits ahead) | Shared-presence multiplayer via `solsocket` ("Option A": presence/events only, no money moves through it) | Room creation confirmed on-chain; as of this session, both simulated players now confirmed resolving to the *same* room address end-to-end. Presence broadcast delivery (`onPresence`) still unconfirmed -- blocked by intermittent devnet RPC fetch flakiness in this sandbox (real, not code-related; sometimes succeeds, sometimes doesn't) | Your own two-browser-profile test -- see the walkthrough in the Stage B section above |
+| `stage-session-keys` | Not merged (1 commit ahead), PR open | Session keys so only `start_run` + session creation prompt the wallet -- swings during the run sign silently, `cash_out` still requires the real wallet. Deployed as its own isolated program (`D2Jk64MauFmg8GhWoe7C2AqLFdQqjTayb5iy2hqrsBFS`) with its own funded treasury, so it can't affect any other branch | All 12 localnet tests pass; frontend builds clean; headless check confirms splash → menu → Play-while-disconnected opens the wallet picker with zero runtime errors | Your own real-wallet test -- exactly two popups (start_run, session creation), then zero popups through several swings, then a normal Cash Out popup |
+
 ## Project layout
 
 ```
