@@ -8,7 +8,7 @@ const pageErrors = [];
 page.on("console", (msg) => consoleMessages.push(`[${msg.type()}] ${msg.text()}`));
 page.on("pageerror", (err) => pageErrors.push(err.message));
 
-await page.goto("http://localhost:5173/scene-debug.html", { waitUntil: "networkidle" });
+await page.goto("http://localhost:5173/scene-debug.html", { waitUntil: "load" });
 await page.waitForTimeout(2500);
 
 const rendererInfo = await page.evaluate(() => {

@@ -8,7 +8,7 @@ const pageErrors = [];
 page.on("console", (msg) => consoleMessages.push(`[${msg.type()}] ${msg.text()}`));
 page.on("pageerror", (err) => pageErrors.push(err.message));
 
-await page.goto("http://localhost:5173", { waitUntil: "networkidle" });
+await page.goto("http://localhost:5173", { waitUntil: "load" });
 await page.waitForTimeout(1500);
 
 const bodyText = await page.evaluate(() => document.body.innerText);
