@@ -123,7 +123,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("splash");
 
   return (
-    <ConnectionProvider endpoint={RPC_ENDPOINT}>
+    <ConnectionProvider endpoint={RPC_ENDPOINT} config={{ commitment: "confirmed" }}>
       {/*
         Dedicated localStorageKey: WalletProvider persists the selected
         wallet's name under this key and reconnects to it directly on next

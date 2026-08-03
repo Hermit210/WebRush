@@ -5,6 +5,13 @@ import { useWebRushProgram } from "../hooks/useWebRushProgram";
 import { useSound } from "../hooks/useSound";
 import type { SessionHandle } from "../hooks/useSessionKey";
 import { ENTRY_FEE_LAMPORTS } from "../anchor/constants";
+import { withTimeout } from "../anchor/withTimeout";
+
+// Bounds how long "Confirming transaction..."/"Setting up session..." can
+// sit on screen -- previously nothing capped this, so a slow/rate-limited
+// devnet RPC left the player staring at an indefinite spinner with no
+// feedback. See README "Known rough edges" for the full story.
+const TX_TIMEOUT_MS = 45000;
 
 /**
  * Menu/home screen. Renders its branding and game info regardless of
@@ -41,16 +48,21 @@ export function Lobby({
       // run / treasury / systemProgram are all PDA-or-constant accounts the
       // Anchor client resolves automatically from the IDL's seed info --
       // only the signer needs to be supplied explicitly.
-      await ctx.program.methods
-        .startRun()
-        .accounts({ player: ctx.wallet.publicKey })
-        .rpc();
+      await withTimeout(
+        ctx.program.methods.startRun().accounts({ player: ctx.wallet.publicKey }).rpc(),
+        TX_TIMEOUT_MS,
+        "start_run is taking too long to confirm. Devnet may be slow or unreachable right now -- please try again."
+      );
 
       // One more wallet approval here creates the session key -- this is
       // what removes the wallet-popup-per-swing problem. Every swing after
       // this point is signed silently by the session key until cash-out.
       setStatus("Setting up session (one more approval)...");
-      await createSession(anchorWallet);
+      await withTimeout(
+        createSession(anchorWallet),
+        TX_TIMEOUT_MS,
+        "Session setup is taking too long to confirm. Devnet may be slow or unreachable right now -- please try again."
+      );
 
       onStarted();
     } catch (err: any) {

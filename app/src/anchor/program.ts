@@ -27,9 +27,16 @@ export const RPC_ENDPOINT =
  * `.methods.startRun()` etc. are compile-time checked instead of `any`.
  */
 export function getProgram(wallet: AnchorWallet) {
-  const connection = new Connection(RPC_ENDPOINT, "processed");
+  // "confirmed", not "processed" -- "processed" is the weakest commitment
+  // level and its subscription-based confirmation can be flaky on devnet's
+  // public RPC (a transaction can appear processed then get skipped without
+  // a clean notification). "confirmed" is the standard, well-supported
+  // choice for a responsive game like this; "finalized" would be safe but
+  // needlessly slow for gameplay. This is what every `.rpc()` call below
+  // (start_run, swing fallback path, cash_out) waits for by default.
+  const connection = new Connection(RPC_ENDPOINT, "confirmed");
   const provider = new AnchorProvider(connection, wallet, {
-    commitment: "processed",
+    commitment: "confirmed",
   });
   return new Program<Webrush>(idl as Webrush, provider);
 }
