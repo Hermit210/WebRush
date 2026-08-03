@@ -58,18 +58,53 @@ export function generateCityLayout(): BuildingSpec[] {
 
 export const MAX_ANCHOR_INDEX = BUILDINGS_PER_SIDE * 2 - 1;
 
-/** World-space swing anchor for a given swing_index, alternating sides. */
-export function getAnchorPoint(swingIndex: number): [number, number, number] {
+/** Same (side, index) resolution `getAnchorPoint`/`getBuildingCenter` share --
+ * factored out once so both stay consistent by construction. */
+function resolveBuilding(swingIndex: number): BuildingSpec {
   const clamped = Math.max(0, Math.min(swingIndex, MAX_ANCHOR_INDEX));
   const side: "left" | "right" = clamped % 2 === 0 ? "left" : "right";
   const i = Math.floor(clamped / 2);
   const buildings = generateCityLayout();
-  const building =
+  return (
     buildings.find((b) => b.side === side && b.index === i) ??
-    buildings[buildings.length - 1];
+    buildings[buildings.length - 1]
+  );
+}
+
+/** World-space swing anchor for a given swing_index, alternating sides. */
+export function getAnchorPoint(swingIndex: number): [number, number, number] {
+  const building = resolveBuilding(swingIndex);
   const innerFaceX =
     building.side === "left"
       ? building.x + building.width / 2
       : building.x - building.width / 2;
   return [innerFaceX, building.height * 0.72, building.z];
+}
+
+/** Same as `getAnchorPoint`, but pushed `clearance` units out into the
+ * street, away from the building face -- for standing/resting the physics
+ * character capsule at, not for the joint's own attach point. The joint
+ * anchor itself must sit exactly on the surface (that's the actual swing
+ * pivot); a capsule collider *centered* there would overlap the building's
+ * own collider and visually clip into it. Physics-only concern -- the
+ * scripted SwingRig (idle/result presentation) doesn't need this since it
+ * has no collider to clip with. */
+export function getRestingPoint(
+  swingIndex: number,
+  clearance = 0.5
+): [number, number, number] {
+  const building = resolveBuilding(swingIndex);
+  const [x, y, z] = getAnchorPoint(swingIndex);
+  const dir = building.side === "left" ? 1 : -1;
+  return [x + dir * clearance, y, z];
+}
+
+/** World-space center of the building at a given swing_index -- matches
+ * City.tsx's mesh placement (`position={[b.x, 0, b.z]}` with the box mesh
+ * itself offset to `[0, b.height / 2, 0]` inside that group). Used to derive
+ * a joint's local anchor on a building's fixed rigid body, which is
+ * positioned at this same center (see BuildingColliders.tsx). */
+export function getBuildingCenter(swingIndex: number): [number, number, number] {
+  const building = resolveBuilding(swingIndex);
+  return [building.x, building.height / 2, building.z];
 }

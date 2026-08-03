@@ -20,8 +20,19 @@ function DebugHarness() {
     let i = 0;
     // Goes up to 9 so it actually crosses the 5x (~index 7) and 10x
     // (~index 9) milestones, exercising FloatingMultiplier/PeakMultiplierBadge.
+    // Deliberately misses on swing 5 (then stops) so this harness also
+    // exercises PhysicsSwingRig's real physics fall path (joint released,
+    // no landing correction, gravity + existing momentum take over) -- not
+    // just the swing-and-land cycle, which the earlier version of this
+    // harness never covered at all.
     const id = setInterval(() => {
       i += 1;
+      if (i === 5) {
+        setPhase("swinging");
+        setTimeout(() => setPhase("missed"), 1200);
+        clearInterval(id);
+        return;
+      }
       setPhase("swinging");
       setSwingIndex(Math.min(i, 9));
       setTimeout(() => setPhase("idle"), 1200);

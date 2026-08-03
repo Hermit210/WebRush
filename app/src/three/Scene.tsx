@@ -1,12 +1,15 @@
 import { Suspense, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
+import { Physics, type RapierRigidBody } from "@react-three/rapier";
 import { EffectComposer, Bloom, Vignette, ChromaticAberration } from "@react-three/postprocessing";
 import * as THREE from "three";
 import { City } from "./City";
+import { BuildingColliders } from "./BuildingColliders";
 import { SwingRig, type SwingPhase } from "./SwingRig";
+import { PhysicsSwingRig } from "./PhysicsSwingRig";
 import { ChaseCamera } from "./ChaseCamera";
 import { IdleCamera } from "./IdleCamera";
-import { getAnchorPoint } from "./cityLayout";
+import { getAnchorPoint, MAX_ANCHOR_INDEX } from "./cityLayout";
 import { FloatingMultiplier } from "./FloatingMultiplier";
 import { PeakMultiplierBadge } from "./PeakMultiplierBadge";
 import { multiplierAt } from "../anchor/constants";
@@ -45,10 +48,12 @@ export function Scene({
   const characterPos = useRef(new THREE.Vector3(...getAnchorPoint(0)));
   const velocity = useRef(0);
   const isIdlePresentation = gamePhase !== "active";
-  // Forced to a fixed resting pose during idle/result -- this is a cosmetic
-  // preview loop, not tied to real game state (see GamePhase doc comment).
-  const effectiveSwingIndex = isIdlePresentation ? 0 : swingIndex;
-  const effectivePhase: SwingPhase = isIdlePresentation ? "idle" : phase;
+  // Populated by <BuildingColliders>, indexed by the same swing_index
+  // addressing getAnchorPoint uses -- lets PhysicsSwingRig look up "the
+  // rigid body for anchor index N" when attaching a swing joint.
+  const buildingBodies = useRef<(RapierRigidBody | null)[]>(
+    new Array(MAX_ANCHOR_INDEX + 1).fill(null)
+  );
 
   return (
     <Canvas
@@ -67,14 +72,34 @@ export function Scene({
 
       <Suspense fallback={null}>
         <City />
-        <SwingRig
-          swingIndex={effectiveSwingIndex}
-          phase={effectivePhase}
-          onPositionUpdate={(p, v) => {
-            characterPos.current.copy(p);
-            velocity.current = v;
-          }}
-        />
+        {isIdlePresentation ? (
+          // Idle/result presentation: the plain scripted rig, standing
+          // still and playing its Idle clip -- no <Physics> world at all
+          // here, since nothing dynamic is happening and a standing
+          // character doesn't need simulation (see PhysicsSwingRig.tsx doc
+          // comment for why active gameplay does).
+          <SwingRig
+            swingIndex={0}
+            phase="idle"
+            onPositionUpdate={(p, v) => {
+              characterPos.current.copy(p);
+              velocity.current = v;
+            }}
+          />
+        ) : (
+          <Physics>
+            <BuildingColliders bodiesRef={buildingBodies} />
+            <PhysicsSwingRig
+              swingIndex={swingIndex}
+              phase={phase}
+              buildingBodies={buildingBodies}
+              onPositionUpdate={(p, v) => {
+                characterPos.current.copy(p);
+                velocity.current = v;
+              }}
+            />
+          </Physics>
+        )}
       </Suspense>
 
       {isIdlePresentation ? (
@@ -86,12 +111,12 @@ export function Scene({
       {!isIdlePresentation && (
         <>
           <FloatingMultiplier
-            key={runId}
-            swingIndex={effectiveSwingIndex}
-            label={`${multiplierAt(effectiveSwingIndex).toFixed(2)}x`}
+            key={`fm-${runId}`}
+            swingIndex={swingIndex}
+            label={`${multiplierAt(swingIndex).toFixed(2)}x`}
             anchorRef={characterPos}
           />
-          <PeakMultiplierBadge key={runId} swingIndex={effectiveSwingIndex} anchorRef={characterPos} />
+          <PeakMultiplierBadge key={`badge-${runId}`} swingIndex={swingIndex} anchorRef={characterPos} />
         </>
       )}
 
