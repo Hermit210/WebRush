@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
-import { RigidBody, CapsuleCollider, useSphericalJoint, type RapierRigidBody } from "@react-three/rapier";
+import { RigidBody, CapsuleCollider, useRopeJoint, type RapierRigidBody } from "@react-three/rapier";
 import * as THREE from "three";
 import { Character, type CharacterAnimation } from "./Character";
 import { getAnchorPoint, getBuildingCenter, getRestingPoint, MAX_ANCHOR_INDEX } from "./cityLayout";
@@ -21,22 +21,38 @@ const CHARACTER_LOCAL_ANCHOR = new THREE.Vector3(0, 0.6, 0);
 
 /**
  * Mounting/unmounting this is literally what attaches/releases the swing
- * joint -- react-three-rapier's useSphericalJoint creates the joint on
- * mount and removes it on unmount (see @react-three/rapier's
- * useImpulseJoint), so a conditionally-rendered wrapper is the natural way
- * to express "joint exists only while actively swinging" without fighting
- * the rules of hooks.
+ * joint -- react-three-rapier's useRopeJoint creates the joint on mount and
+ * removes it on unmount (see @react-three/rapier's useImpulseJoint), so a
+ * conditionally-rendered wrapper is the natural way to express "joint
+ * exists only while actively swinging" without fighting the rules of hooks.
+ *
+ * A ROPE joint, not a spherical one (this was the actual bug in the first
+ * version of this file -- see PhysicsSwingRig's own doc comment below for
+ * the full story): a spherical/ball-and-socket joint forces its two anchor
+ * points to be exactly coincident, including at the instant of creation.
+ * The character starts near its OWN building, tens of units from the
+ * target anchor across the street -- attaching a spherical joint between
+ * two points that far apart makes Rapier's solver try to snap them
+ * together in a single step, which is a violent, physically-nonsensical
+ * correction (the "flying debris" / character-exploding bug). A rope joint
+ * only LIMITS the max distance between the two points; as long as `length`
+ * is computed as the actual current distance at attach time (see below),
+ * the rope starts already taut with zero correction needed, and gravity
+ * does the rest -- character falls freely until the rope goes taut, then
+ * swings like an actual pendulum around the fixed anchor.
  */
 function SwingJoint({
   characterRef,
   targetRef,
   targetLocalAnchor,
+  length,
 }: {
   characterRef: RefObject<RapierRigidBody>;
   targetRef: RefObject<RapierRigidBody>;
   targetLocalAnchor: THREE.Vector3;
+  length: number;
 }) {
-  useSphericalJoint(characterRef, targetRef, [CHARACTER_LOCAL_ANCHOR, targetLocalAnchor]);
+  useRopeJoint(characterRef, targetRef, [CHARACTER_LOCAL_ANCHOR, targetLocalAnchor, length]);
   return null;
 }
 
@@ -46,19 +62,18 @@ function SwingJoint({
  * uses the plain scripted SwingRig, which is cheaper and doesn't need
  * physics for a standing-still character).
  *
- * The pendulum motion itself comes entirely from a Rapier spherical joint
- * (a ball-and-socket constraint -- "typically used to simulate ragdoll
- * arms, pendulums, etc." per react-three-rapier's own docs) plus gravity:
- * attached to the NEXT anchor building the moment `phase` becomes
- * "swinging" (the same optimistic, pre-confirmation trigger the old
- * scripted rig used), released the moment `phase` changes away from that.
- * On a successful landing (phase -> "idle" with a new swingIndex), the
- * character is snapped onto the confirmed exact anchor point -- a small
- * correction, not a teleport across the whole swing, since the physics
- * motion already carried it most of the way there. On a miss (phase ->
- * "missed"), nothing extra happens: the joint is already gone, so gravity
- * and whatever velocity the character already had take over as a real
- * physics fall, not a scripted drop curve.
+ * The pendulum motion itself comes entirely from a Rapier rope joint (see
+ * SwingJoint's doc comment above for why a rope joint, not a spherical
+ * one) plus gravity: attached to the NEXT anchor building the moment
+ * `phase` becomes "swinging" (the same optimistic, pre-confirmation
+ * trigger the old scripted rig used), released the moment `phase` changes
+ * away from that. On a successful landing (phase -> "idle" with a new
+ * swingIndex), the character is snapped onto the confirmed exact anchor
+ * point -- a small correction, not a teleport across the whole swing,
+ * since the physics motion already carried it most of the way there. On a
+ * miss (phase -> "missed"), nothing extra happens: the joint is already
+ * gone, so gravity and whatever velocity the character already had take
+ * over as a real physics fall, not a scripted drop curve.
  */
 export function PhysicsSwingRig({
   swingIndex,
@@ -72,6 +87,7 @@ export function PhysicsSwingRig({
     key: number;
     targetRef: RefObject<RapierRigidBody>;
     localAnchor: THREE.Vector3;
+    length: number;
   } | null>(null);
 
   // Snap to the correct starting anchor exactly once, when this rig first
@@ -89,13 +105,32 @@ export function PhysicsSwingRig({
     if (phase === "swinging") {
       const targetIndex = Math.min(swingIndex + 1, MAX_ANCHOR_INDEX);
       const targetBody = buildingBodies.current[targetIndex];
-      if (targetBody) {
+      const body = characterRef.current;
+      if (targetBody && body) {
         const [bx, by, bz] = getBuildingCenter(targetIndex);
         const [ax, ay, az] = getAnchorPoint(targetIndex);
+        const worldAnchor2 = new THREE.Vector3(ax, ay, az);
+
+        // Rope length = the REAL current distance from the character's
+        // hand-anchor to the target, read fresh from the rigid body right
+        // now -- not a stale precomputed position. This is what makes the
+        // rope start already taut (character free-falls until it reaches
+        // this exact length, then swings) instead of snapping violently to
+        // close a gap, which is what the previous spherical-joint version
+        // did wrong (see SwingJoint's doc comment).
+        const charPos = body.translation();
+        const worldAnchor1 = new THREE.Vector3(
+          charPos.x + CHARACTER_LOCAL_ANCHOR.x,
+          charPos.y + CHARACTER_LOCAL_ANCHOR.y,
+          charPos.z + CHARACTER_LOCAL_ANCHOR.z
+        );
+        const length = worldAnchor1.distanceTo(worldAnchor2);
+
         setJointTarget({
           key: targetIndex,
           targetRef: { current: targetBody },
           localAnchor: new THREE.Vector3(ax - bx, ay - by, az - bz),
+          length,
         });
       }
       return;
@@ -137,6 +172,8 @@ export function PhysicsSwingRig({
         type="dynamic"
         position={getRestingPoint(swingIndex)}
         enabledRotations={[false, false, false]}
+        linearDamping={0.15}
+        angularDamping={0.5}
         ccd
       >
         <CapsuleCollider args={[0.5, 0.4]} />
@@ -148,6 +185,7 @@ export function PhysicsSwingRig({
           characterRef={characterRef}
           targetRef={jointTarget.targetRef}
           targetLocalAnchor={jointTarget.localAnchor}
+          length={jointTarget.length}
         />
       )}
     </>
