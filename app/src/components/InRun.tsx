@@ -7,7 +7,13 @@ import {
   estimatedPayoutLamports,
   multiplierAt,
 } from "../anchor/constants";
+import { withTimeout } from "../anchor/withTimeout";
 import type { SwingPhase } from "../three/SwingRig";
+
+// Bounds a single swing/cash-out attempt so a slow/rate-limited devnet RPC
+// can't leave the UI hanging on "Swinging..."/"Confirming cash-out..."
+// indefinitely -- see README "Known rough edges" for the full story.
+const TX_TIMEOUT_MS = 45000;
 
 export type RunResult =
   | { outcome: "cashed_out"; payoutLamports: number; multiplier: number }
@@ -67,64 +73,74 @@ export function InRun({
       setBusy(true);
       setPhase("swinging");
       try {
-        let sig: string;
-        if (session) {
-          // Session-signed path: no wallet popup. `run`'s PDA must be
-          // passed explicitly -- its seeds are self-referential
-          // (derived from run.player, not the signer) precisely so the
-          // same Run account resolves whether the direct wallet or a
-          // session key is doing the signing, which means Anchor's
-          // client can no longer auto-derive it from context.
-          // `as any`: Anchor's generated type for this instruction's
-          // accounts object omits `run` entirely, on the (here, incorrect)
-          // assumption that anything with a `pda` seed spec is always
-          // auto-derivable client-side. That's not true for a
-          // self-referential seed (run.player) -- it genuinely cannot be
-          // computed without already knowing the value, so it must be
-          // passed explicitly despite what the type says. Verified working
-          // at runtime via tests/session-keys.ts, which does the same.
-          const swingTx = await ctx.program.methods
-            .swing()
-            .accounts({
-              player: session.sessionKeypair.publicKey,
-              run: ctx.run,
-              sessionToken: session.sessionTokenPda,
-            } as any)
-            .transaction();
-          swingTx.feePayer = session.sessionKeypair.publicKey;
-          swingTx.recentBlockhash = (
-            await ctx.connection.getLatestBlockhash()
-          ).blockhash;
-          swingTx.sign(session.sessionKeypair);
-          sig = await ctx.connection.sendRawTransaction(swingTx.serialize());
-        } else {
-          // Fallback: original direct-wallet path (one popup per swing).
-          // `as any` for the same reason as the session path above.
-          sig = await ctx.program.methods
-            .swing()
-            .accounts({ player: ctx.wallet.publicKey, run: ctx.run, sessionToken: null } as any)
-            .rpc();
-        }
-        await ctx.connection.confirmTransaction(sig, "confirmed");
-        const run = await ctx.program.account.run.fetch(ctx.run);
-        const status = run.status as any;
+        // Whole attempt (send + confirm + refetch) is bounded by
+        // TX_TIMEOUT_MS -- previously nothing capped this, so a slow or
+        // rate-limited devnet RPC could leave the UI stuck on "Swinging..."
+        // indefinitely with no feedback.
+        await withTimeout(
+          (async () => {
+            let sig: string;
+            if (session) {
+              // Session-signed path: no wallet popup. `run`'s PDA must be
+              // passed explicitly -- its seeds are self-referential
+              // (derived from run.player, not the signer) precisely so the
+              // same Run account resolves whether the direct wallet or a
+              // session key is doing the signing, which means Anchor's
+              // client can no longer auto-derive it from context.
+              // `as any`: Anchor's generated type for this instruction's
+              // accounts object omits `run` entirely, on the (here, incorrect)
+              // assumption that anything with a `pda` seed spec is always
+              // auto-derivable client-side. That's not true for a
+              // self-referential seed (run.player) -- it genuinely cannot be
+              // computed without already knowing the value, so it must be
+              // passed explicitly despite what the type says. Verified working
+              // at runtime via tests/session-keys.ts, which does the same.
+              const swingTx = await ctx.program.methods
+                .swing()
+                .accounts({
+                  player: session.sessionKeypair.publicKey,
+                  run: ctx.run,
+                  sessionToken: session.sessionTokenPda,
+                } as any)
+                .transaction();
+              swingTx.feePayer = session.sessionKeypair.publicKey;
+              swingTx.recentBlockhash = (
+                await ctx.connection.getLatestBlockhash()
+              ).blockhash;
+              swingTx.sign(session.sessionKeypair);
+              sig = await ctx.connection.sendRawTransaction(swingTx.serialize());
+            } else {
+              // Fallback: original direct-wallet path (one popup per swing).
+              // `as any` for the same reason as the session path above.
+              sig = await ctx.program.methods
+                .swing()
+                .accounts({ player: ctx.wallet.publicKey, run: ctx.run, sessionToken: null } as any)
+                .rpc();
+            }
+            await ctx.connection.confirmTransaction(sig, "confirmed");
+            const run = await ctx.program.account.run.fetch(ctx.run);
+            const status = run.status as any;
 
-        if (status.missed) {
-          finishedRef.current = true;
-          setSwingIndex(run.swingIndex);
-          setPhase("missed");
-          playSound("miss");
-          setTimeout(() => {
-            onFinished({ outcome: "missed", multiplier: multiplierAt(run.swingIndex) });
-          }, MISS_ANIMATION_MS);
-          return;
-        }
-        setSwingIndex(run.swingIndex);
-        setPhase("idle");
-        playSound("tick");
-        if (!cancelled && !finishedRef.current) {
-          timer = setTimeout(tick, 2000);
-        }
+            if (status.missed) {
+              finishedRef.current = true;
+              setSwingIndex(run.swingIndex);
+              setPhase("missed");
+              playSound("miss");
+              setTimeout(() => {
+                onFinished({ outcome: "missed", multiplier: multiplierAt(run.swingIndex) });
+              }, MISS_ANIMATION_MS);
+              return;
+            }
+            setSwingIndex(run.swingIndex);
+            setPhase("idle");
+            playSound("tick");
+            if (!cancelled && !finishedRef.current) {
+              timer = setTimeout(tick, 2000);
+            }
+          })(),
+          TX_TIMEOUT_MS,
+          "Swing is taking too long to confirm. Devnet may be slow or unreachable right now -- please try again."
+        );
       } catch (err: any) {
         setPhase("idle");
         setError(err?.message ?? String(err));
@@ -148,11 +164,20 @@ export function InRun({
     try {
       // cash_out is deliberately NOT session-aware -- cashing out always
       // requires the real wallet, by design (see README security model).
-      const sig = await ctx.program.methods
-        .cashOut()
-        .accounts({ player: ctx.wallet.publicKey })
-        .rpc();
-      await ctx.connection.confirmTransaction(sig, "confirmed");
+      // Bounded by TX_TIMEOUT_MS for the same reason as the swing loop
+      // above -- a slow/rate-limited devnet RPC shouldn't leave the player
+      // staring at "Confirming cash-out..." indefinitely.
+      await withTimeout(
+        (async () => {
+          const sig = await ctx.program.methods
+            .cashOut()
+            .accounts({ player: ctx.wallet.publicKey })
+            .rpc();
+          await ctx.connection.confirmTransaction(sig, "confirmed");
+        })(),
+        TX_TIMEOUT_MS,
+        "Cash-out is taking too long to confirm. Devnet may be slow or unreachable right now -- please try again."
+      );
       setPhase("cashed_out");
       playSound("cashout");
       const payoutLamports = estimatedPayoutLamports(ENTRY_FEE_LAMPORTS, swingIndex);
