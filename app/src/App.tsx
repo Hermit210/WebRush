@@ -83,9 +83,7 @@ function GameFlow({
       </div>
 
       {screen === "menu" && (
-        <div className="stage-overlay">
-          <Lobby onStarted={handleStarted} createSession={createSession} />
-        </div>
+        <Lobby onStarted={handleStarted} createSession={createSession} />
       )}
 
       {screen === "in-run" && (

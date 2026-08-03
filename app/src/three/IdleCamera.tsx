@@ -1,5 +1,5 @@
-import { useEffect, useRef, type MutableRefObject } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useRef, type MutableRefObject } from "react";
+import { useFrame } from "@react-three/fiber";
 import { PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -12,6 +12,11 @@ interface IdleCameraProps {
 // "broken/frozen" per the menu-preview spec). Radius/height/angle-speed are
 // all offset by independent, non-multiple periods so the loop never repeats
 // in a way that reads as mechanical.
+//
+// No view-offset framing trick here (there used to be one, to dodge a big
+// centered menu card) -- the menu UI is now two small corner/edge panels
+// (see Lobby.tsx's .menu-hud-panel / .menu-play-dock), not a center-screen
+// card, so the character can just be centered as the dominant visual.
 const RADIUS = 24;
 const BASE_HEIGHT = 10;
 const ANGLE_SPEED = 0.045; // rad/s -- a full loop takes ~140s, ambient not dizzying
@@ -19,21 +24,6 @@ const ANGLE_SPEED = 0.045; // rad/s -- a full loop takes ~140s, ambient not dizz
 export function IdleCamera({ focusRef }: IdleCameraProps) {
   const camRef = useRef<THREE.PerspectiveCamera>(null);
   const t0 = useRef(performance.now());
-  const { size } = useThree();
-
-  // The menu/result overlay card sits centered on top of this canvas (see
-  // App.tsx's .stage-overlay) -- without this, the camera looks straight at
-  // the character, which lands it dead-center, exactly where the card
-  // covers it. An asymmetric view offset keeps the look-at target (the
-  // character) unchanged but shifts where it renders on screen, toward the
-  // lower-right where the card doesn't reach, so the idling character is
-  // actually visible instead of hidden behind the panel.
-  useEffect(() => {
-    const cam = camRef.current;
-    if (!cam || !size.width || !size.height) return;
-    cam.setViewOffset(size.width, size.height, -size.width * 0.3, -size.height * 0.22, size.width, size.height);
-    cam.updateProjectionMatrix();
-  }, [size]);
 
   useFrame(() => {
     const cam = camRef.current;
