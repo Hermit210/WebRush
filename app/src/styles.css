@@ -36,7 +36,13 @@ body,
 .card {
   width: 100%;
   max-width: 420px;
-  background: var(--panel);
+  /* Translucent + blurred, not solid -- this now always sits on top of the
+     live 3D <Scene> (see App.tsx's GameFlow), so the neon city/character
+     stay visible glowing through it instead of being hidden behind a flat
+     opaque panel. */
+  background: rgba(20, 26, 46, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid #232b4d;
   border-radius: 16px;
   padding: 28px;
@@ -186,18 +192,17 @@ button {
   color: var(--danger);
 }
 
-/* --- 3D in-run stage: <Canvas> fills the stage, HTML/CSS HUD panels sit
+/* --- 3D stage: <Canvas> fills the stage, HTML/CSS HUD panels sit
    absolutely on top -- kept as plain overlay components per the spec
    ("don't rebuild UI as 3D in-scene text"), just restyled to feel
-   integrated with the glow palette instead of a plain opaque card. */
+   integrated with the glow palette instead of a plain opaque card.
+   `position: fixed` deliberately escapes .app-shell's flex-centered,
+   padded layout -- the 3D scene is the dominant visual and should fill
+   the actual viewport edge-to-edge, not sit in a bounded rounded-corner
+   box with visible page background around it. */
 .game-stage {
-  position: relative;
-  width: min(920px, 96vw);
-  height: min(640px, 82vh);
-  border-radius: 20px;
-  overflow: hidden;
-  border: 1px solid #232b4d;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  position: fixed;
+  inset: 0;
   background: #05060c;
 }
 
@@ -210,6 +215,104 @@ button {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* Centers the menu/result .card on top of the live 3D canvas -- the canvas
+   itself is never covered by an opaque background here, only the card's own
+   translucent panel (see .card above) sits in front of it. */
+.stage-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* --- Menu HUD: corner/edge-positioned elements over the full-bleed 3D
+   scene, not a centered card blocking it -- title-screen convention (game
+   world fills the screen, UI lives in small pieces at the edges). Wrapper
+   itself is click-through so nothing outside the two actual panels below
+   can ever block interaction with the scene. */
+.menu-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.menu-hud-panel {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  max-width: 260px;
+  background: rgba(20, 26, 46, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid #232b4d;
+  border-radius: 12px;
+  padding: 14px 16px;
+  pointer-events: auto;
+}
+
+.menu-title {
+  font-size: 1.1rem;
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+}
+
+.menu-stats {
+  color: var(--muted);
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-stats-divider {
+  opacity: 0.5;
+}
+
+.menu-play-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.btn-play-pill {
+  width: auto;
+  min-width: 160px;
+  padding: 14px 40px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0b0e1a;
+  font-weight: 700;
+  box-shadow: 0 8px 28px rgba(77, 208, 255, 0.35);
+}
+
+.btn-play-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-line--compact {
+  margin: 0;
+  background: rgba(20, 26, 46, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.error-banner--compact {
+  margin: 10px 0 0;
+  padding: 6px 10px;
+  font-size: 0.75rem;
 }
 
 .hud-overlay {

@@ -81,31 +81,28 @@ export function Lobby({
   }
 
   return (
-    <div className="card">
-      <h1>WebRush</h1>
-      <p className="subtitle">Swing, climb the multiplier, cash out before you miss.</p>
-
-      {error && <div className="error-banner">{error}</div>}
-
-      <div className="row">
-        <span className="muted">Entry fee</span>
-        <span>{(ENTRY_FEE_LAMPORTS / 1e9).toFixed(2)} SOL</span>
-      </div>
-      <div className="row">
-        <span className="muted">Max multiplier</span>
-        <span>20.00x</span>
-      </div>
-
-      {status && (
-        <div className="status-line">
-          <span className="spinner" />
-          {status}
+    <div className="menu-overlay">
+      <div className="menu-hud-panel">
+        <h1 className="menu-title">WebRush</h1>
+        <div className="menu-stats">
+          <span>{(ENTRY_FEE_LAMPORTS / 1e9).toFixed(2)} SOL entry</span>
+          <span className="menu-stats-divider">&middot;</span>
+          <span>20.00x max</span>
         </div>
-      )}
+        {error && <div className="error-banner error-banner--compact">{error}</div>}
+      </div>
 
-      <button className="btn-primary" onClick={handlePlayClick} disabled={!!status} style={{ marginTop: 20 }}>
-        {status ? "Starting..." : "Play"}
-      </button>
+      <div className="menu-play-dock">
+        {status && (
+          <div className="status-line status-line--compact">
+            <span className="spinner" />
+            {status}
+          </div>
+        )}
+        <button className="btn-play-pill" onClick={handlePlayClick} disabled={!!status}>
+          {status ? "Starting..." : "Play"}
+        </button>
+      </div>
     </div>
   );
 }
